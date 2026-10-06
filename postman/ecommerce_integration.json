@@ -1,0 +1,2028 @@
+{
+  "info": {
+    "_postman_id": "5f0f6a8e-2d4b-4c3f-9a51-6f3cfb1d2a10",
+    "name": "OnlineStoreSystem - ecommerce integration",
+    "description": "File: postman/ecommerce_integration.json\n\nEnd-to-end tests for the four OnlineStoreSystem services and the orchestrated checkout saga.\nRun everything with the Collection Runner or newman:\n\n    npx newman run postman/ecommerce_integration.json --folder \"00 Health\" ...\n    npx newman run postman/ecommerce_integration.json\n\nEvery request gets a generated X-Correlation-Id (collection pre-request script) unless it pins one, and every error response is asserted to be RFC 7807 application/problem+json carrying that correlation id.\nFolder 07 contains manual resilience experiments and is skipped automatically by newman when the services are healthy (it accepts 202 or 503).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Correlation id at the edge: generate one per request unless the request already sets it.",
+          "if (!pm.request.headers.has('X-Correlation-Id')) {",
+          "    pm.request.headers.add({ key: 'X-Correlation-Id', value: 'postman-' + pm.variables.replaceIn('{{$guid}}') });",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('X-Correlation-Id is echoed', () => pm.response.to.have.header('X-Correlation-Id'));",
+          "if (pm.response.code >= 400) {",
+          "    pm.test('RFC 7807 application/problem+json', () => {",
+          "        pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+          "        const problem = pm.response.json();",
+          "        pm.expect(problem.status).to.eql(pm.response.code);",
+          "        pm.expect(problem).to.have.property('title');",
+          "        pm.expect(problem).to.have.property('type');",
+          "        pm.expect(problem.correlationId).to.eql(pm.response.headers.get('X-Correlation-Id'));",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "catalogUrl",
+      "value": "http://localhost:5001"
+    },
+    {
+      "key": "orderUrl",
+      "value": "http://localhost:5002"
+    },
+    {
+      "key": "inventoryUrl",
+      "value": "http://localhost:5003"
+    },
+    {
+      "key": "paymentUrl",
+      "value": "http://localhost:5004"
+    },
+    {
+      "key": "storefrontUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "newSku",
+      "value": ""
+    },
+    {
+      "key": "productId",
+      "value": ""
+    },
+    {
+      "key": "stockProductId",
+      "value": ""
+    },
+    {
+      "key": "stockSku",
+      "value": ""
+    },
+    {
+      "key": "reservationOrderId",
+      "value": ""
+    },
+    {
+      "key": "paymentOrderId",
+      "value": ""
+    },
+    {
+      "key": "idempotencyKey",
+      "value": ""
+    },
+    {
+      "key": "paymentId",
+      "value": ""
+    },
+    {
+      "key": "stockBefore",
+      "value": ""
+    },
+    {
+      "key": "happyCorrelationId",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "compensationOrderId",
+      "value": ""
+    },
+    {
+      "key": "draftOrderId",
+      "value": ""
+    },
+    {
+      "key": "pollAttempts",
+      "value": "0"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Health",
+      "description": "Readiness of every application (database + RabbitMQ checks).",
+      "item": [
+        {
+          "name": "Catalog /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{catalogUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Healthy', () => pm.expect(pm.response.json().status).to.eql('Healthy'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Order /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{orderUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Healthy', () => pm.expect(pm.response.json().status).to.eql('Healthy'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Inventory /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{inventoryUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Healthy', () => pm.expect(pm.response.json().status).to.eql('Healthy'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payment /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{paymentUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Healthy', () => pm.expect(pm.response.json().status).to.eql('Healthy'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Storefront /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{storefrontUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Healthy', () => pm.expect(pm.response.json().status).to.eql('Healthy'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 Catalog Service",
+      "description": "Products CRUD - contracts/catalog-v1.yaml. Errors are RFC 7807.",
+      "item": [
+        {
+          "name": "List products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{catalogUrl}}/api/v1/products?page=1&pageSize=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('5 seeded products or more', () => pm.expect(pm.response.json().totalCount).to.be.at.least(5));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get product 1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{catalogUrl}}/api/v1/products/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('SKU KB-MECH-001', () => pm.expect(pm.response.json().sku).to.eql('KB-MECH-001'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Batch lookup ids=1,3 (used by OrderService)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{catalogUrl}}/api/v1/products?ids=1&ids=3&includeInactive=true"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('2 products', () => pm.expect(pm.response.json().items.length).to.eql(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{catalogUrl}}/api/v1/products",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{newSku}}\",\n  \"name\": \"USB-C Docking Station\",\n  \"description\": \"12-in-1 dock\",\n  \"category\": \"Peripherals\",\n  \"price\": 189.0,\n  \"currency\": \"USD\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('newSku', 'PM-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Location header', () => pm.response.to.have.header('Location'));",
+                  "pm.collectionVariables.set('productId', pm.response.json().productId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create product - duplicate SKU (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{catalogUrl}}/api/v1/products",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{newSku}}\",\n  \"name\": \"Duplicate\",\n  \"category\": \"Peripherals\",\n  \"price\": 1,\n  \"currency\": \"USD\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update product",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{catalogUrl}}/api/v1/products/{{productId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{newSku}}\",\n  \"name\": \"USB-C Docking Station v2\",\n  \"description\": \"Now with 2.5 GbE\",\n  \"category\": \"Peripherals\",\n  \"price\": 199.0,\n  \"currency\": \"USD\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('price updated', () => pm.expect(pm.response.json().price).to.eql(199));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create product - validation error (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{catalogUrl}}/api/v1/products",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"\",\n  \"name\": \"\",\n  \"category\": \"x\",\n  \"price\": -1,\n  \"currency\": \"usd\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors per field', () => pm.expect(pm.response.json().errors).to.have.property('Currency'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete product",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{catalogUrl}}/api/v1/products/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get deleted product (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{catalogUrl}}/api/v1/products/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 Inventory Service",
+      "description": "Stock CRUD + manual reserve / release / commit - contracts/inventory-v1.yaml.",
+      "item": [
+        {
+          "name": "List stock levels",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('at least 5 items', () => pm.expect(pm.response.json().length).to.be.at.least(5));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get stock of product 1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create stock record",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{inventoryUrl}}/api/v1/inventory",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{stockProductId}}\",\n  \"sku\": \"{{stockSku}}\",\n  \"quantityOnHand\": 10,\n  \"reorderThreshold\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const id = 100000 + Math.floor(Math.random() * 800000);",
+                  "pm.collectionVariables.set('stockProductId', id);",
+                  "pm.collectionVariables.set('stockSku', 'PM-STOCK-' + id);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update stock level",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{inventoryUrl}}/api/v1/inventory/{{stockProductId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantityOnHand\": 20,\n  \"reorderThreshold\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('on hand 20', () => pm.expect(pm.response.json().quantityOnHand).to.eql(20));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Manual reserve",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{inventoryUrl}}/api/v1/inventory/reservations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{reservationOrderId}}\",\n  \"items\": [\n    {\n      \"productId\": \"{{stockProductId}}\",\n      \"quantity\": 5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('reservationOrderId', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Reserved', () => pm.expect(pm.response.json().outcome).to.eql('Reserved'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Manual reserve again - idempotent (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{inventoryUrl}}/api/v1/inventory/reservations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{reservationOrderId}}\",\n  \"items\": [\n    {\n      \"productId\": \"{{stockProductId}}\",\n      \"quantity\": 5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('AlreadyReserved', () => pm.expect(pm.response.json().outcome).to.eql('AlreadyReserved'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reserve more than available (409 insufficient-stock)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{inventoryUrl}}/api/v1/inventory/reservations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{$guid}}\",\n  \"items\": [\n    {\n      \"productId\": \"{{stockProductId}}\",\n      \"quantity\": 50\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('problem type', () => pm.expect(pm.response.json().type).to.eql('urn:onlinestoresystem:problems:insufficient-stock'));",
+                  "pm.test('shortages listed', () => pm.expect(pm.response.json().shortages.length).to.eql(1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get reservations of order",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory/reservations/{{reservationOrderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete stock with active reservation (409)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory/{{stockProductId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Release reservation (compensation)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory/reservations/{{reservationOrderId}}/release"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Released', () => pm.expect(pm.response.json().outcome).to.eql('Released'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Commit after release (nothing to commit)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory/reservations/{{reservationOrderId}}/commit"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('NothingToCommit', () => pm.expect(pm.response.json().outcome).to.eql('NothingToCommit'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete stock record",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory/{{stockProductId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get deleted stock (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory/{{stockProductId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 Payment Service",
+      "description": "Charge (idempotent) and refunds - contracts/payment-v1.yaml. Decline triggers: amount 9999.00, card 4000000000000002.",
+      "item": [
+        {
+          "name": "Charge - approved",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{paymentUrl}}/api/v1/payments/charge",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": 120.5,\n  \"currency\": \"USD\",\n  \"cardNumber\": \"4242424242424242\",\n  \"cardHolderName\": \"Postman Tester\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2030\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('paymentOrderId', pm.variables.replaceIn('{{$guid}}'));",
+                  "pm.collectionVariables.set('idempotencyKey', 'postman-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Captured', () => pm.expect(pm.response.json().status).to.eql('Captured'));",
+                  "pm.collectionVariables.set('paymentId', pm.response.json().paymentId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Charge - same Idempotency-Key replays",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{paymentUrl}}/api/v1/payments/charge",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": 120.5,\n  \"currency\": \"USD\",\n  \"cardNumber\": \"4242424242424242\",\n  \"cardHolderName\": \"Postman Tester\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2030\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Idempotent-Replayed: true', () => pm.expect(pm.response.headers.get('Idempotent-Replayed')).to.eql('true'));",
+                  "pm.test('same payment returned', () => pm.expect(pm.response.json().paymentId).to.eql(pm.collectionVariables.get('paymentId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Charge - same key, different payload (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{paymentUrl}}/api/v1/payments/charge",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": 1.0,\n  \"currency\": \"USD\",\n  \"cardNumber\": \"4242424242424242\",\n  \"cardHolderName\": \"Postman Tester\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2030\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Charge - amount 9999.00 declined (402)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{paymentUrl}}/api/v1/payments/charge",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": 9999.0,\n  \"currency\": \"USD\",\n  \"cardNumber\": \"4242424242424242\",\n  \"cardHolderName\": \"Postman Tester\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2030\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 402', () => pm.response.to.have.status(402));",
+                  "pm.test('declineCode amount_limit_exceeded', () => pm.expect(pm.response.json().declineCode).to.eql('amount_limit_exceeded'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Charge - card 4000000000000002 declined (402)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{paymentUrl}}/api/v1/payments/charge",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": 120.5,\n  \"currency\": \"USD\",\n  \"cardNumber\": \"4000000000000002\",\n  \"cardHolderName\": \"Postman Tester\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2030\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 402', () => pm.response.to.have.status(402));",
+                  "pm.test('declineCode card_declined', () => pm.expect(pm.response.json().declineCode).to.eql('card_declined'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Charge - invalid card number (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{paymentUrl}}/api/v1/payments/charge",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": 120.5,\n  \"currency\": \"USD\",\n  \"cardNumber\": \"1234\",\n  \"cardHolderName\": \"Postman Tester\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2030\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Partial refund",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{paymentUrl}}/api/v1/payments/{{paymentId}}/refunds",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 20.5,\n  \"reason\": \"Damaged packaging\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('PartiallyRefunded', () => pm.expect(pm.response.json().status).to.eql('PartiallyRefunded'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refund more than balance (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{paymentUrl}}/api/v1/payments/{{paymentId}}/refunds",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 500\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Full refund of the balance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{paymentUrl}}/api/v1/payments/{{paymentId}}/refunds",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Refunded', () => pm.expect(pm.response.json().status).to.eql('Refunded'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refund a refunded payment (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{paymentUrl}}/api/v1/payments/{{paymentId}}/refunds",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get payment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{paymentUrl}}/api/v1/payments/{{paymentId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('2 refunds', () => pm.expect(pm.response.json().refunds.length).to.eql(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List payments of order",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{paymentUrl}}/api/v1/payments?orderId={{paymentOrderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 Saga - Happy path",
+      "description": "Validate products (sync) -> order Pending -> reserve stock (RabbitMQ) -> charge (sync) -> Completed. Run with the Collection Runner / newman so the poll request can repeat.",
+      "item": [
+        {
+          "name": "Stock of product 1 before",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('stockBefore', pm.response.json().quantityOnHand);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Checkout (202 Accepted)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{happyCorrelationId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/checkout",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"postman-customer\",\n  \"customerEmail\": \"postman@example.com\",\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"quantity\": 2\n    },\n    {\n      \"productId\": 2,\n      \"quantity\": 1\n    }\n  ],\n  \"payment\": {\n    \"cardNumber\": \"4242424242424242\",\n    \"cardHolderName\": \"Postman Tester\",\n    \"expiryMonth\": 12,\n    \"expiryYear\": 2030\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('happyCorrelationId', 'postman-happy-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 202', () => pm.response.to.have.status(202));",
+                  "pm.test('Location header', () => pm.response.to.have.header('Location'));",
+                  "pm.test('Pending', () => pm.expect(pm.response.json().status).to.eql('Pending'));",
+                  "pm.test('same correlation id echoed', () => pm.expect(pm.response.headers.get('X-Correlation-Id')).to.eql(pm.collectionVariables.get('happyCorrelationId')));",
+                  "pm.collectionVariables.set('orderId', pm.response.json().orderId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Poll order until final -> Completed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{orderUrl}}/api/v1/orders/{{orderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const order = pm.response.json();",
+                  "const finalOrder = ['Completed', 'Cancelled'].includes(order.status);",
+                  "const finalSaga = !!order.saga && ['Completed', 'Compensated', 'Failed'].includes(order.saga.status);",
+                  "const attempts = Number(pm.collectionVariables.get('pollAttempts') || 0);",
+                  "if (!(finalOrder && finalSaga) && attempts < 40) {",
+                  "    // Saga still running: wait 500 ms and send this request again (Collection Runner / newman).",
+                  "    pm.collectionVariables.set('pollAttempts', attempts + 1);",
+                  "    setTimeout(() => {}, 500);",
+                  "    if (pm.execution && pm.execution.setNextRequest) { pm.execution.setNextRequest(pm.info.requestName); }",
+                  "    else { postman.setNextRequest(pm.info.requestName); }",
+                  "} else {",
+                  "    pm.collectionVariables.set('pollAttempts', 0);",
+                  "    pm.test('saga reached a final state', () => pm.expect(finalOrder && finalSaga).to.be.true);",
+                  "    pm.test('order status is Completed', () => pm.expect(order.status).to.eql('Completed'));",
+                  "    pm.test('saga status is Completed', () => pm.expect(order.saga.status).to.eql('Completed'));",
+                  "    pm.test('paymentId set', () => pm.expect(order.paymentId).to.be.a('string'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stock of product 1 after (decremented by 2)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('on hand decremented by 2', () => pm.expect(pm.response.json().quantityOnHand).to.eql(Number(pm.collectionVariables.get('stockBefore')) - 2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payment recorded for the order",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{paymentUrl}}/api/v1/payments?orderId={{orderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('one Captured payment', () => { const p = pm.response.json(); pm.expect(p.length).to.eql(1); pm.expect(p[0].status).to.eql('Captured'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reservations committed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory/reservations/{{orderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('all Committed', () => pm.expect(pm.response.json().reservations.every(r => r.status === 'Committed')).to.be.true);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 Saga - Compensation",
+      "description": "Payment declined after stock was reserved -> PaymentFailedEvent -> InventoryService releases the stock -> saga Compensated, order Cancelled.",
+      "item": [
+        {
+          "name": "Stock of product 3 before",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory/3"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('stockBefore', pm.response.json().quantityAvailable);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Checkout with declined card 4000000000000002",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/checkout",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"postman-customer\",\n  \"customerEmail\": \"postman@example.com\",\n  \"items\": [\n    {\n      \"productId\": 3,\n      \"quantity\": 1\n    }\n  ],\n  \"payment\": {\n    \"cardNumber\": \"4000000000000002\",\n    \"cardHolderName\": \"Postman Tester\",\n    \"expiryMonth\": 12,\n    \"expiryYear\": 2030\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 202', () => pm.response.to.have.status(202));",
+                  "pm.collectionVariables.set('compensationOrderId', pm.response.json().orderId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Poll order until final -> Cancelled / Compensated",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{orderUrl}}/api/v1/orders/{{compensationOrderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const order = pm.response.json();",
+                  "const finalOrder = ['Completed', 'Cancelled'].includes(order.status);",
+                  "const finalSaga = !!order.saga && ['Completed', 'Compensated', 'Failed'].includes(order.saga.status);",
+                  "const attempts = Number(pm.collectionVariables.get('pollAttempts') || 0);",
+                  "if (!(finalOrder && finalSaga) && attempts < 40) {",
+                  "    // Saga still running: wait 500 ms and send this request again (Collection Runner / newman).",
+                  "    pm.collectionVariables.set('pollAttempts', attempts + 1);",
+                  "    setTimeout(() => {}, 500);",
+                  "    if (pm.execution && pm.execution.setNextRequest) { pm.execution.setNextRequest(pm.info.requestName); }",
+                  "    else { postman.setNextRequest(pm.info.requestName); }",
+                  "} else {",
+                  "    pm.collectionVariables.set('pollAttempts', 0);",
+                  "    pm.test('saga reached a final state', () => pm.expect(finalOrder && finalSaga).to.be.true);",
+                  "    pm.test('order status is Cancelled', () => pm.expect(order.status).to.eql('Cancelled'));",
+                  "    pm.test('saga status is Compensated', () => pm.expect(order.saga.status).to.eql('Compensated'));",
+                  "    pm.test('ReleaseStock compensated', () => pm.expect(order.saga.steps.some(s => s.stepName === 'ReleaseStock' && s.outcome === 'Compensated')).to.be.true);",
+                  "    pm.test('failure reason mentions payment', () => pm.expect(order.failureReason).to.include('Payment failed'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stock of product 3 after (unchanged)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory/3"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('available stock restored', () => pm.expect(pm.response.json().quantityAvailable).to.eql(Number(pm.collectionVariables.get('stockBefore'))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reservations released",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{inventoryUrl}}/api/v1/inventory/reservations/{{compensationOrderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('all Released', () => pm.expect(pm.response.json().reservations.every(r => r.status === 'Released')).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Declined payment recorded",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{paymentUrl}}/api/v1/payments?orderId={{compensationOrderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Declined', () => pm.expect(pm.response.json()[0].status).to.eql('Declined'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Checkout total 9999.00 (1 x Cinema Camera Pro 8K)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/checkout",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"postman-customer\",\n  \"customerEmail\": \"postman@example.com\",\n  \"items\": [\n    {\n      \"productId\": 5,\n      \"quantity\": 1\n    }\n  ],\n  \"payment\": {\n    \"cardNumber\": \"4242424242424242\",\n    \"cardHolderName\": \"Postman Tester\",\n    \"expiryMonth\": 12,\n    \"expiryYear\": 2030\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 202', () => pm.response.to.have.status(202));",
+                  "pm.collectionVariables.set('compensationOrderId', pm.response.json().orderId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Poll 9999.00 order -> Cancelled / Compensated",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{orderUrl}}/api/v1/orders/{{compensationOrderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const order = pm.response.json();",
+                  "const finalOrder = ['Completed', 'Cancelled'].includes(order.status);",
+                  "const finalSaga = !!order.saga && ['Completed', 'Compensated', 'Failed'].includes(order.saga.status);",
+                  "const attempts = Number(pm.collectionVariables.get('pollAttempts') || 0);",
+                  "if (!(finalOrder && finalSaga) && attempts < 40) {",
+                  "    // Saga still running: wait 500 ms and send this request again (Collection Runner / newman).",
+                  "    pm.collectionVariables.set('pollAttempts', attempts + 1);",
+                  "    setTimeout(() => {}, 500);",
+                  "    if (pm.execution && pm.execution.setNextRequest) { pm.execution.setNextRequest(pm.info.requestName); }",
+                  "    else { postman.setNextRequest(pm.info.requestName); }",
+                  "} else {",
+                  "    pm.collectionVariables.set('pollAttempts', 0);",
+                  "    pm.test('saga reached a final state', () => pm.expect(finalOrder && finalSaga).to.be.true);",
+                  "    pm.test('order status is Cancelled', () => pm.expect(order.status).to.eql('Cancelled'));",
+                  "    pm.test('saga status is Compensated', () => pm.expect(order.saga.status).to.eql('Compensated'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 Orders - CRUD & validation",
+      "description": "Draft orders (CRUD), draft checkout, RFC 7807 400/404/409 responses.",
+      "item": [
+        {
+          "name": "Create draft order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"postman-customer\",\n  \"customerEmail\": \"postman@example.com\",\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"quantity\": 1\n    },\n    {\n      \"productId\": 1,\n      \"quantity\": 2\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Draft with merged lines', () => { const o = pm.response.json(); pm.expect(o.status).to.eql('Draft'); pm.expect(o.items[0].quantity).to.eql(3); });",
+                  "pm.collectionVariables.set('draftOrderId', pm.response.json().orderId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update draft order",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/{{draftOrderId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"postman-customer\",\n  \"customerEmail\": \"postman@example.com\",\n  \"items\": [\n    {\n      \"productId\": 2,\n      \"quantity\": 2\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('total re-priced', () => pm.expect(pm.response.json().totalAmount).to.eql(99.98));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Saga of a draft (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{orderUrl}}/api/v1/orders/{{draftOrderId}}/saga"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Checkout the draft (202)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/{{draftOrderId}}/checkout",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment\": {\n    \"cardNumber\": \"4242424242424242\",\n    \"cardHolderName\": \"Postman Tester\",\n    \"expiryMonth\": 12,\n    \"expiryYear\": 2030\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 202', () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update after checkout (409)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/{{draftOrderId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"postman-customer\",\n  \"customerEmail\": \"postman@example.com\",\n  \"items\": [\n    {\n      \"productId\": 2,\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Checkout unknown product (400 from product validation)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/checkout",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"postman-customer\",\n  \"customerEmail\": \"postman@example.com\",\n  \"items\": [\n    {\n      \"productId\": 999999,\n      \"quantity\": 1\n    }\n  ],\n  \"payment\": {\n    \"cardNumber\": \"4242424242424242\",\n    \"cardHolderName\": \"Postman Tester\",\n    \"expiryMonth\": 12,\n    \"expiryYear\": 2030\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error on items[0].productId', () => pm.expect(pm.response.json().errors).to.have.property('items[0].productId'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Checkout invalid payload (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/checkout",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"\",\n  \"customerEmail\": \"not-an-email\",\n  \"items\": [],\n  \"payment\": {\n    \"cardNumber\": \"1234\",\n    \"cardHolderName\": \"x\",\n    \"expiryMonth\": 13,\n    \"expiryYear\": 2020\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List my orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{orderUrl}}/api/v1/orders?customerId=postman-customer&pageSize=50"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('has orders', () => pm.expect(pm.response.json().totalCount).to.be.at.least(1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete a completed order (409)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{orderUrl}}/api/v1/orders/{{orderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create a draft to delete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"postman-customer\",\n  \"customerEmail\": \"postman@example.com\",\n  \"items\": [\n    {\n      \"productId\": 4,\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('draftOrderId', pm.response.json().orderId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete draft order",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{orderUrl}}/api/v1/orders/{{draftOrderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get deleted order (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{orderUrl}}/api/v1/orders/{{draftOrderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 Resilience & tracing (manual)",
+      "description": "Manual experiments - not part of the automated run (use the folder runner on its own):\n1. Stop CatalogService and send 'Checkout during Catalog outage': OrderService retries with exponential backoff + jitter, then answers 503 RFC 7807.\n2. Restart CatalogService with `--FaultInjection:Enabled=true` and send it again: two 503s are retried and the checkout succeeds (202).\n3. grep the fixed correlation id `postman-trace-demo` in logs/*.log to see the request in every service.",
+      "item": [
+        {
+          "name": "Checkout during Catalog outage / fault injection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Correlation-Id",
+                "value": "postman-trace-demo"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/checkout",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"postman-customer\",\n  \"customerEmail\": \"postman@example.com\",\n  \"items\": [\n    {\n      \"productId\": 4,\n      \"quantity\": 1\n    }\n  ],\n  \"payment\": {\n    \"cardNumber\": \"4242424242424242\",\n    \"cardHolderName\": \"Postman Tester\",\n    \"expiryMonth\": 12,\n    \"expiryYear\": 2030\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 (recovered) or 503 (gave up)', () => pm.expect(pm.response.code).to.be.oneOf([202, 503]));",
+                  "if (pm.response.code === 503) { pm.test('dependency-unavailable problem', () => pm.expect(pm.response.json().type).to.eql('urn:onlinestoresystem:problems:dependency-unavailable')); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Storefront home page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{storefrontUrl}}/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
