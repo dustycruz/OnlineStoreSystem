@@ -1,0 +1,329 @@
+# File: contracts/events-asyncapi.yaml
+# Contract-first AsyncAPI 2.6 description of the RabbitMQ integration events (Module 4).
+# Complements the four OpenAPI documents: HTTP is described there, messaging here.
+asyncapi: 2.6.0
+info:
+  title: OnlineStoreSystem integration events
+  version: "1.0.0"
+  description: |
+    Topology (declared idempotently by every service on startup - see Shared/Messaging/MessagingTopology.cs):
+
+    ```
+    exchange onlinestore.events (topic, durable)
+      order.placed                                         -> queue inventory.order-placed     (InventoryService)
+      payment.processed | payment.failed | order.cancelled -> queue inventory.order-outcomes   (InventoryService)
+      inventory.stock-reserved | inventory.stock-reservation-failed | inventory.stock-released
+                                                           -> queue order.inventory-replies    (OrderService)
+    exchange onlinestore.dlx (direct, durable)
+      <queue name>                                         -> queue <queue name>.dlq
+    ```
+
+    Delivery guarantees:
+    * Publishers use **publisher confirms** and `mandatory: true`; OrderService publishes through a
+      **transactional outbox** (OrderDb.OutboxMessages).
+    * Messages are persistent (delivery-mode 2) and carry AMQP `message_id` (= `eventId`), `correlation_id`,
+      `type` (= message name below) and an `X-Correlation-Id` header.
+    * Consumers use **manual acknowledgements**: `BasicAck` on success, `BasicNack(requeue: true)` once for a
+      transient failure, `BasicNack(requeue: false)` for poison messages or a second failure -> dead-letter queue.
+    * InventoryService consumers are **idempotent** (InventoryDb.ProcessedMessages keyed by MessageId + Consumer).
+  license:
+    name: MIT
+servers:
+  local:
+    url: localhost:5672
+    protocol: amqp
+    description: Native RabbitMQ install (guest/guest). CloudAMQP works too (amqps://...).
+defaultContentType: application/json
+
+channels:
+  order.placed:
+    description: Saga step "Reserve Stock" request.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: onlinestore.events
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: /
+    publish:
+      operationId: receiveOrderPlaced
+      summary: InventoryService (queue inventory.order-placed) reserves stock for the order.
+      message:
+        $ref: "#/components/messages/OrderPlacedEvent"
+    subscribe:
+      operationId: publishOrderPlaced
+      summary: OrderService publishes after persisting the order as Pending (via outbox).
+      message:
+        $ref: "#/components/messages/OrderPlacedEvent"
+
+  inventory.stock-reserved:
+    description: Reply - every line was reserved.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: onlinestore.events
+          type: topic
+    subscribe:
+      operationId: publishStockReserved
+      message:
+        $ref: "#/components/messages/StockReservedEvent"
+
+  inventory.stock-reservation-failed:
+    description: Reply - stock could not be reserved (nothing changed).
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: onlinestore.events
+          type: topic
+    subscribe:
+      operationId: publishStockReservationFailed
+      message:
+        $ref: "#/components/messages/StockReservationFailedEvent"
+
+  inventory.stock-released:
+    description: Reply - ReleaseStock compensation done.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: onlinestore.events
+          type: topic
+    subscribe:
+      operationId: publishStockReleased
+      message:
+        $ref: "#/components/messages/StockReleasedEvent"
+
+  payment.processed:
+    description: Payment captured - InventoryService commits the reservation.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: onlinestore.events
+          type: topic
+    subscribe:
+      operationId: publishPaymentProcessed
+      message:
+        $ref: "#/components/messages/PaymentProcessedEvent"
+
+  payment.failed:
+    description: Payment failed - trigger of the ReleaseStock compensation.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: onlinestore.events
+          type: topic
+    subscribe:
+      operationId: publishPaymentFailed
+      message:
+        $ref: "#/components/messages/PaymentFailedEvent"
+
+  order.cancelled:
+    description: Order cancelled for a non-payment reason (timeout, late reservation) - release stock.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: onlinestore.events
+          type: topic
+    subscribe:
+      operationId: publishOrderCancelled
+      message:
+        $ref: "#/components/messages/OrderCancelledEvent"
+
+components:
+  messageTraits:
+    IntegrationEvent:
+      headers:
+        type: object
+        properties:
+          X-Correlation-Id:
+            type: string
+          x-occurred-at:
+            type: string
+            format: date-time
+      bindings:
+        amqp:
+          contentEncoding: utf-8
+          deliveryMode: 2
+
+  schemas:
+    EventEnvelope:
+      type: object
+      required: [eventId, occurredAtUtc, schemaVersion, messageType]
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: Also the AMQP message_id; idempotency key for consumers.
+        occurredAtUtc:
+          type: string
+          format: date-time
+        correlationId:
+          type: string
+        schemaVersion:
+          type: integer
+          default: 1
+        messageType:
+          type: string
+
+    OrderLineItem:
+      type: object
+      required: [productId, sku, quantity, unitPrice]
+      properties:
+        productId: { type: integer }
+        sku: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        unitPrice: { type: number }
+
+    ReservedStockLine:
+      type: object
+      required: [productId, quantity, remainingAvailable]
+      properties:
+        productId: { type: integer }
+        quantity: { type: integer }
+        remainingAvailable: { type: integer }
+
+    StockShortage:
+      type: object
+      required: [productId, requested, available]
+      properties:
+        productId: { type: integer }
+        requested: { type: integer }
+        available: { type: integer }
+
+    ReleasedStockLine:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId: { type: integer }
+        quantity: { type: integer }
+
+  messages:
+    OrderPlacedEvent:
+      name: OrderPlacedEvent
+      traits:
+        - $ref: "#/components/messageTraits/IntegrationEvent"
+      payload:
+        allOf:
+          - $ref: "#/components/schemas/EventEnvelope"
+          - type: object
+            required: [orderId, orderNumber, customerId, totalAmount, currency, items]
+            properties:
+              orderId: { type: string, format: uuid }
+              orderNumber: { type: string }
+              customerId: { type: string }
+              totalAmount: { type: number }
+              currency: { type: string }
+              items:
+                type: array
+                minItems: 1
+                items:
+                  $ref: "#/components/schemas/OrderLineItem"
+
+    StockReservedEvent:
+      name: StockReservedEvent
+      traits:
+        - $ref: "#/components/messageTraits/IntegrationEvent"
+      payload:
+        allOf:
+          - $ref: "#/components/schemas/EventEnvelope"
+          - type: object
+            required: [orderId, items]
+            properties:
+              orderId: { type: string, format: uuid }
+              items:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReservedStockLine"
+              isReplay:
+                type: boolean
+                description: True when re-sent for a redelivered (already processed) OrderPlacedEvent.
+
+    StockReservationFailedEvent:
+      name: StockReservationFailedEvent
+      traits:
+        - $ref: "#/components/messageTraits/IntegrationEvent"
+      payload:
+        allOf:
+          - $ref: "#/components/schemas/EventEnvelope"
+          - type: object
+            required: [orderId, reason, shortages]
+            properties:
+              orderId: { type: string, format: uuid }
+              reason: { type: string }
+              shortages:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockShortage"
+              isReplay: { type: boolean }
+
+    StockReleasedEvent:
+      name: StockReleasedEvent
+      traits:
+        - $ref: "#/components/messageTraits/IntegrationEvent"
+      payload:
+        allOf:
+          - $ref: "#/components/schemas/EventEnvelope"
+          - type: object
+            required: [orderId, items, triggeredBy]
+            properties:
+              orderId: { type: string, format: uuid }
+              items:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReleasedStockLine"
+              triggeredBy:
+                type: string
+                enum: [PaymentFailedEvent, OrderCancelledEvent]
+              isReplay: { type: boolean }
+
+    PaymentProcessedEvent:
+      name: PaymentProcessedEvent
+      traits:
+        - $ref: "#/components/messageTraits/IntegrationEvent"
+      payload:
+        allOf:
+          - $ref: "#/components/schemas/EventEnvelope"
+          - type: object
+            required: [orderId, paymentId, amount, currency]
+            properties:
+              orderId: { type: string, format: uuid }
+              paymentId: { type: string, format: uuid }
+              amount: { type: number }
+              currency: { type: string }
+
+    PaymentFailedEvent:
+      name: PaymentFailedEvent
+      traits:
+        - $ref: "#/components/messageTraits/IntegrationEvent"
+      payload:
+        allOf:
+          - $ref: "#/components/schemas/EventEnvelope"
+          - type: object
+            required: [orderId, amount, currency, reason]
+            properties:
+              orderId: { type: string, format: uuid }
+              paymentId: { type: string, format: uuid, nullable: true }
+              amount: { type: number }
+              currency: { type: string }
+              reason: { type: string }
+              declineCode: { type: string }
+
+    OrderCancelledEvent:
+      name: OrderCancelledEvent
+      traits:
+        - $ref: "#/components/messageTraits/IntegrationEvent"
+      payload:
+        allOf:
+          - $ref: "#/components/schemas/EventEnvelope"
+          - type: object
+            required: [orderId, reason]
+            properties:
+              orderId: { type: string, format: uuid }
+              reason: { type: string }

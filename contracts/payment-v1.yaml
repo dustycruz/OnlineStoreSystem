@@ -1,0 +1,401 @@
+# File: contracts/payment-v1.yaml
+# Contract-first OpenAPI 3.0 specification of OnlineStoreSystem.PaymentService.
+# Served at http://localhost:5004/contracts/payment-v1.yaml and rendered by Swagger UI (http://localhost:5004/swagger).
+openapi: 3.0.3
+info:
+  title: OnlineStoreSystem Payment API
+  version: "1.0.0"
+  description: |
+    Payment processing and refunds (database **PaymentDb**). Saga participant for the *Process Payment* step,
+    called synchronously by OrderService through a resilient HTTP client.
+
+    **Idempotency** - send `Idempotency-Key`. A retry with the same key and payload returns the ORIGINAL outcome
+    (`Idempotent-Replayed: true`) instead of charging twice; the same key with a different payload is rejected (422).
+
+    **Deterministic decline triggers** (to demonstrate saga compensation):
+
+    | Input | Result | declineCode |
+    |-------|--------|-------------|
+    | card `4000000000000002` | 402 | `card_declined` |
+    | card `4000000000009995` | 402 | `insufficient_funds` |
+    | amount exactly `9999.00` | 402 | `amount_limit_exceeded` |
+    | anything else, e.g. `4242424242424242` | 201 | - |
+
+    Only the brand and last four digits of a card are stored. All errors are RFC 7807 Problem Details.
+  license:
+    name: MIT
+servers:
+  - url: http://localhost:5004
+    description: Local development (dotnet run)
+tags:
+  - name: Payments
+  - name: Refunds
+
+paths:
+  /api/v1/payments/charge:
+    post:
+      tags: [Payments]
+      operationId: chargePayment
+      summary: Charge a card for an order
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Unique key per logical charge (OrderService uses `order-{orderId}-charge`).
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChargeRequest"
+            examples:
+              approved:
+                value:
+                  orderId: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                  amount: 309.97
+                  currency: USD
+                  cardNumber: "4242424242424242"
+                  cardHolderName: Alice Doe
+                  expiryMonth: 12
+                  expiryYear: 2030
+              declined:
+                value:
+                  orderId: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                  amount: 9999.00
+                  currency: USD
+                  cardNumber: "4242424242424242"
+                  cardHolderName: Alice Doe
+                  expiryMonth: 12
+                  expiryYear: 2030
+      responses:
+        "201":
+          description: Payment captured.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+            Idempotent-Replayed:
+              description: "`true` when the stored outcome of an earlier request with the same key is returned."
+              schema:
+                type: string
+                enum: ["true"]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          description: Payment declined (RFC 7807, type urn:onlinestoresystem:problems:payment-declined).
+          headers:
+            Idempotent-Replayed:
+              schema:
+                type: string
+                enum: ["true"]
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/PaymentDeclinedProblem"
+              example:
+                type: urn:onlinestoresystem:problems:payment-declined
+                title: Payment declined
+                status: 402
+                detail: Charges of exactly 9999.00 USD are declined (deterministic saga-compensation trigger).
+                instance: /api/v1/payments/charge
+                paymentId: 0f8fad5b-d9cb-469f-a165-70867728950e
+                orderId: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                declineCode: amount_limit_exceeded
+                amount: 9999.00
+                currency: USD
+                correlationId: demo-0002
+                service: PaymentService
+        "422":
+          description: Idempotency-Key reused with a different payload (RFC 7807).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+  /api/v1/payments:
+    get:
+      tags: [Payments]
+      operationId: listPayments
+      summary: List payments (most recent first, max 100), optionally for one order
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+        - name: orderId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Payments.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+
+  /api/v1/payments/{paymentId}:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+      - $ref: "#/components/parameters/CorrelationId"
+    get:
+      tags: [Payments]
+      operationId: getPaymentById
+      summary: Get a payment
+      responses:
+        "200":
+          description: The payment with its refunds.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/payments/{paymentId}/refunds:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+      - $ref: "#/components/parameters/CorrelationId"
+    post:
+      tags: [Refunds]
+      operationId: refundPayment
+      summary: Refund a captured payment (omit `amount` for a full refund of the remaining balance)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefundRequest"
+            example:
+              amount: 20.50
+              reason: Damaged packaging
+      responses:
+        "200":
+          description: Updated payment (status PartiallyRefunded or Refunded).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The payment is not refundable (declined / already fully refunded) or was modified concurrently (RFC 7807).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+components:
+  parameters:
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 64
+        pattern: "^[A-Za-z0-9._:-]{1,64}$"
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Validation failed (RFC 7807 validation problem).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ValidationProblemDetails"
+    NotFound:
+      description: Payment not found (RFC 7807).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+  schemas:
+    ChargeRequest:
+      type: object
+      required: [orderId, amount, currency, cardNumber, cardHolderName, expiryMonth, expiryYear]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          description: At most two decimal places.
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        cardNumber:
+          type: string
+          description: 12-19 digits passing the Luhn check (spaces/dashes allowed). Never stored.
+        cardHolderName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        expiryMonth:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 12
+        expiryYear:
+          type: integer
+          format: int32
+          minimum: 2000
+          maximum: 2100
+
+    RefundRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          nullable: true
+        reason:
+          type: string
+          maxLength: 500
+          nullable: true
+
+    Refund:
+      type: object
+      required: [refundId, amount, createdAtUtc]
+      properties:
+        refundId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+        reason:
+          type: string
+          nullable: true
+        createdAtUtc:
+          type: string
+          format: date-time
+
+    Payment:
+      type: object
+      required: [paymentId, orderId, amount, currency, status, cardBrand, cardLast4, refundedAmount, createdAtUtc, refunds]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [Captured, Declined, PartiallyRefunded, Refunded]
+        cardBrand:
+          type: string
+          example: Visa
+        cardLast4:
+          type: string
+          example: "4242"
+        declineCode:
+          type: string
+          nullable: true
+          enum: [card_declined, insufficient_funds, amount_limit_exceeded, null]
+        failureReason:
+          type: string
+          nullable: true
+        refundedAmount:
+          type: number
+          format: decimal
+        createdAtUtc:
+          type: string
+          format: date-time
+        updatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        refunds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Refund"
+
+    ProblemDetails:
+      type: object
+      description: RFC 7807 / RFC 9457 problem document with OnlineStoreSystem extension members.
+      additionalProperties: true
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+          nullable: true
+        instance:
+          type: string
+          format: uri-reference
+        traceId:
+          type: string
+        correlationId:
+          type: string
+        service:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidationProblemDetails:
+      allOf:
+        - $ref: "#/components/schemas/ProblemDetails"
+        - type: object
+          properties:
+            errors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+
+    PaymentDeclinedProblem:
+      allOf:
+        - $ref: "#/components/schemas/ProblemDetails"
+        - type: object
+          properties:
+            paymentId:
+              type: string
+              format: uuid
+            orderId:
+              type: string
+              format: uuid
+            declineCode:
+              type: string
+              enum: [card_declined, insufficient_funds, amount_limit_exceeded]
+            amount:
+              type: number
+              format: decimal
+            currency:
+              type: string

@@ -1,0 +1,508 @@
+# File: contracts/inventory-v1.yaml
+# Contract-first OpenAPI 3.0 specification of OnlineStoreSystem.InventoryService.
+# Served at http://localhost:5003/contracts/inventory-v1.yaml and rendered by Swagger UI (http://localhost:5003/swagger).
+openapi: 3.0.3
+info:
+  title: OnlineStoreSystem Inventory API
+  version: "1.0.0"
+  description: |
+    Stock levels and reservations (database **InventoryDb**).
+
+    In the checkout saga InventoryService is driven **asynchronously over RabbitMQ** (see
+    `contracts/events-asyncapi.yaml`): `OrderPlacedEvent` reserves stock, `PaymentProcessedEvent` commits it,
+    `PaymentFailedEvent` / `OrderCancelledEvent` release it (compensation). Consumers are idempotent
+    (`ProcessedMessages` table) and dead-letter poison messages to `<queue>.dlq`.
+
+    The HTTP API below offers stock CRUD plus **manual** reserve / release / commit endpoints for operators and demos.
+    All errors are RFC 7807 Problem Details.
+  license:
+    name: MIT
+servers:
+  - url: http://localhost:5003
+    description: Local development (dotnet run)
+tags:
+  - name: Stock
+    description: Stock levels per product
+  - name: Reservations
+    description: Manual reservation management
+
+paths:
+  /api/v1/inventory:
+    get:
+      tags: [Stock]
+      operationId: listInventory
+      summary: List stock levels of all products
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+        - name: lowStockOnly
+          in: query
+          description: Only items whose available quantity is at or below the reorder threshold.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Stock levels ordered by productId.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
+    post:
+      tags: [Stock]
+      operationId: createInventoryItem
+      summary: Create the stock record of a product
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInventoryItemRequest"
+            example:
+              productId: 6
+              sku: TB-USB-006
+              quantityOnHand: 30
+              reorderThreshold: 5
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/inventory/{productId}:
+    parameters:
+      - $ref: "#/components/parameters/ProductId"
+      - $ref: "#/components/parameters/CorrelationId"
+    get:
+      tags: [Stock]
+      operationId: getInventoryItem
+      summary: Get the stock level of a product
+      responses:
+        "200":
+          description: Stock level.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Stock]
+      operationId: updateInventoryItem
+      summary: Set absolute stock levels (e.g. after a stock take)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInventoryItemRequest"
+      responses:
+        "200":
+          description: Updated stock level.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [Stock]
+      operationId: deleteInventoryItem
+      summary: Delete the stock record (refused while reservations are active)
+      responses:
+        "204":
+          description: Deleted.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/inventory/reservations:
+    post:
+      tags: [Reservations]
+      operationId: reserveStock
+      summary: Reserve stock for an order (all lines or nothing)
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReserveStockRequest"
+            example:
+              orderId: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+              items:
+                - productId: 1
+                  quantity: 2
+      responses:
+        "201":
+          description: Reserved.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationResult"
+        "200":
+          description: The order already held reservations (idempotent repeat) - nothing changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Insufficient stock (RFC 7807, type urn:onlinestoresystem:problems:insufficient-stock).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/InsufficientStockProblem"
+              example:
+                type: urn:onlinestoresystem:problems:insufficient-stock
+                title: Insufficient stock
+                status: 409
+                detail: "product 3: requested 41, available 40"
+                orderId: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                shortages:
+                  - productId: 3
+                    requested: 41
+                    available: 40
+
+  /api/v1/inventory/reservations/{orderId}:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+      - $ref: "#/components/parameters/CorrelationId"
+    get:
+      tags: [Reservations]
+      operationId: getReservations
+      summary: List the reservations of an order
+      responses:
+        "200":
+          description: Reservations (outcome `Found`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationResult"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/inventory/reservations/{orderId}/release:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+      - $ref: "#/components/parameters/CorrelationId"
+    post:
+      tags: [Reservations]
+      operationId: releaseStock
+      summary: Release the active reservations of an order (manual ReleaseStock compensation, idempotent)
+      responses:
+        "200":
+          description: Outcome `Released` or `NothingToRelease`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationResult"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/inventory/reservations/{orderId}/commit:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+      - $ref: "#/components/parameters/CorrelationId"
+    post:
+      tags: [Reservations]
+      operationId: commitStock
+      summary: Commit the active reservations of an order (stock leaves on-hand quantity, idempotent)
+      responses:
+        "200":
+          description: Outcome `Committed` or `NothingToCommit`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationResult"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+components:
+  parameters:
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 64
+        pattern: "^[A-Za-z0-9._:-]{1,64}$"
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Validation failed (RFC 7807 validation problem).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ValidationProblemDetails"
+    NotFound:
+      description: Not found (RFC 7807).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Conflict:
+      description: Conflicting state - duplicate record, stock below reservations, active reservations or a concurrent update (RFC 7807).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+  schemas:
+    InventoryItem:
+      type: object
+      required: [inventoryItemId, productId, sku, quantityOnHand, quantityReserved, quantityAvailable, reorderThreshold, needsReorder, createdAtUtc]
+      properties:
+        inventoryItemId:
+          type: integer
+          format: int32
+        productId:
+          type: integer
+          format: int32
+        sku:
+          type: string
+          maxLength: 64
+        quantityOnHand:
+          type: integer
+          format: int32
+          minimum: 0
+        quantityReserved:
+          type: integer
+          format: int32
+          minimum: 0
+        quantityAvailable:
+          type: integer
+          format: int32
+          description: quantityOnHand - quantityReserved
+        reorderThreshold:
+          type: integer
+          format: int32
+        needsReorder:
+          type: boolean
+        createdAtUtc:
+          type: string
+          format: date-time
+        updatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateInventoryItemRequest:
+      type: object
+      required: [productId, sku, quantityOnHand]
+      properties:
+        productId:
+          type: integer
+          format: int32
+          minimum: 1
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[A-Za-z0-9][A-Za-z0-9-]{0,63}$"
+        quantityOnHand:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 1000000
+        reorderThreshold:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 1000000
+          default: 5
+
+    UpdateInventoryItemRequest:
+      type: object
+      required: [quantityOnHand, reorderThreshold]
+      properties:
+        quantityOnHand:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 1000000
+        reorderThreshold:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 1000000
+
+    StockLineRequest:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: integer
+          format: int32
+          minimum: 1
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 1000
+
+    ReserveStockRequest:
+      type: object
+      required: [orderId, items]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/StockLineRequest"
+
+    StockReservation:
+      type: object
+      required: [stockReservationId, orderId, productId, quantity, status, createdAtUtc]
+      properties:
+        stockReservationId:
+          type: integer
+          format: int64
+        orderId:
+          type: string
+          format: uuid
+        productId:
+          type: integer
+          format: int32
+        quantity:
+          type: integer
+          format: int32
+        status:
+          type: string
+          enum: [Reserved, Committed, Released]
+        createdAtUtc:
+          type: string
+          format: date-time
+        updatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+
+    ReservationResult:
+      type: object
+      required: [orderId, outcome, reservations]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        outcome:
+          type: string
+          enum: [Found, Reserved, AlreadyReserved, Released, NothingToRelease, Committed, NothingToCommit]
+        reservations:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockReservation"
+
+    StockShortage:
+      type: object
+      required: [productId, requested, available]
+      properties:
+        productId:
+          type: integer
+          format: int32
+        requested:
+          type: integer
+          format: int32
+        available:
+          type: integer
+          format: int32
+
+    ProblemDetails:
+      type: object
+      description: RFC 7807 / RFC 9457 problem document with OnlineStoreSystem extension members.
+      additionalProperties: true
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+          nullable: true
+        instance:
+          type: string
+          format: uri-reference
+        traceId:
+          type: string
+        correlationId:
+          type: string
+        service:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidationProblemDetails:
+      allOf:
+        - $ref: "#/components/schemas/ProblemDetails"
+        - type: object
+          properties:
+            errors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+
+    InsufficientStockProblem:
+      allOf:
+        - $ref: "#/components/schemas/ProblemDetails"
+        - type: object
+          properties:
+            orderId:
+              type: string
+              format: uuid
+            shortages:
+              type: array
+              items:
+                $ref: "#/components/schemas/StockShortage"

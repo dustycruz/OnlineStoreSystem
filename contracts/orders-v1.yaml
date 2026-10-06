@@ -1,0 +1,690 @@
+# File: contracts/orders-v1.yaml
+# Contract-first OpenAPI 3.0 specification of OnlineStoreSystem.OrderService (saga orchestrator).
+# Served at http://localhost:5002/contracts/orders-v1.yaml and rendered by Swagger UI (http://localhost:5002/swagger).
+openapi: 3.0.3
+info:
+  title: OnlineStoreSystem Orders API
+  version: "1.0.0"
+  description: |
+    Orders and checkout (database **OrderDb**). OrderService **orchestrates the checkout saga**:
+
+    | # | Step | Mechanism | On failure |
+    |---|------|-----------|------------|
+    | 1 | ValidateProducts | sync HTTP -> CatalogService (retry + exponential backoff + jitter, timeouts) | 400 / 503 to the caller |
+    | 2 | CreateOrder (Pending) | local transaction + transactional outbox | - |
+    | 3 | ReserveStock | async: `OrderPlacedEvent` -> InventoryService -> `StockReservedEvent` / `StockReservationFailedEvent` | order Cancelled |
+    | 4 | ProcessPayment | sync HTTP -> PaymentService (Idempotency-Key) | **compensation**: `PaymentFailedEvent` -> ReleaseStock -> order Cancelled |
+    | 5 | CompleteOrder | order Completed + `PaymentProcessedEvent` (stock committed) | - |
+
+    `POST /api/v1/orders/checkout` therefore answers **202 Accepted**; poll `GET /api/v1/orders/{orderId}` until
+    `status` is `Completed` or `Cancelled` (the `saga` object shows every step).
+
+    Deterministic compensation triggers: card `4000000000000002`, or an order total of exactly `9999.00`.
+
+    All errors are **RFC 7807 Problem Details**. `X-Correlation-Id` is accepted, echoed and propagated to every
+    downstream HTTP call and RabbitMQ message.
+  license:
+    name: MIT
+servers:
+  - url: http://localhost:5002
+    description: Local development (dotnet run)
+tags:
+  - name: Checkout
+    description: Start the orchestrated saga
+  - name: Orders
+    description: Order queries and draft-order CRUD
+
+paths:
+  /api/v1/orders:
+    get:
+      tags: [Orders]
+      operationId: listOrders
+      summary: List orders (newest first)
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+        - name: customerId
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/OrderStatus"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of order summaries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderSummaryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      tags: [Orders]
+      operationId: createDraftOrder
+      summary: Create a DRAFT order (products validated and priced by CatalogService, no saga yet)
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+            example:
+              customerId: cust-001
+              customerEmail: alice@example.com
+              items:
+                - productId: 1
+                  quantity: 2
+      responses:
+        "201":
+          description: Draft order created.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/orders/checkout:
+    post:
+      tags: [Checkout]
+      operationId: checkout
+      summary: One-shot checkout - create the order and start the saga
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutRequest"
+            examples:
+              happyPath:
+                summary: Approved card
+                value:
+                  customerId: cust-001
+                  customerEmail: alice@example.com
+                  items:
+                    - productId: 1
+                      quantity: 2
+                    - productId: 2
+                      quantity: 1
+                  payment:
+                    cardNumber: "4242424242424242"
+                    cardHolderName: Alice Doe
+                    expiryMonth: 12
+                    expiryYear: 2030
+              compensation:
+                summary: Declined card -> ReleaseStock compensation
+                value:
+                  customerId: cust-002
+                  customerEmail: bob@example.com
+                  items:
+                    - productId: 3
+                      quantity: 1
+                  payment:
+                    cardNumber: "4000000000000002"
+                    cardHolderName: Bob Smith
+                    expiryMonth: 11
+                    expiryYear: 2029
+      responses:
+        "202":
+          description: Order accepted as `Pending`; the saga continues asynchronously.
+          headers:
+            Location:
+              description: URL to poll for the final status.
+              schema:
+                type: string
+                format: uri
+            X-Correlation-Id:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/orders/{orderId}:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+      - $ref: "#/components/parameters/CorrelationId"
+    get:
+      tags: [Orders]
+      operationId: getOrderById
+      summary: Get an order including items and saga state
+      responses:
+        "200":
+          description: The order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Orders]
+      operationId: updateDraftOrder
+      summary: Replace a DRAFT order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderRequest"
+      responses:
+        "200":
+          description: Updated draft order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      tags: [Orders]
+      operationId: deleteOrder
+      summary: Delete a DRAFT order or a CANCELLED order whose saga has finished
+      responses:
+        "204":
+          description: Deleted.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/orders/{orderId}/checkout:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+      - $ref: "#/components/parameters/CorrelationId"
+    post:
+      tags: [Checkout]
+      operationId: checkoutDraftOrder
+      summary: Check out an existing DRAFT order (starts the saga)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitOrderRequest"
+      responses:
+        "202":
+          description: Order accepted as `Pending`.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/orders/{orderId}/saga:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+      - $ref: "#/components/parameters/CorrelationId"
+    get:
+      tags: [Orders]
+      operationId: getOrderSaga
+      summary: Get the saga state and audit trail of an order
+      responses:
+        "200":
+          description: Saga state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Saga"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  parameters:
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: Correlation id of the end-to-end operation. Generated when absent.
+      schema:
+        type: string
+        maxLength: 64
+        pattern: "^[A-Za-z0-9._:-]{1,64}$"
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  headers:
+    CorrelationId:
+      description: The correlation id used for this request (echoed or generated).
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Validation failed - including products rejected by CatalogService (RFC 7807).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ValidationProblemDetails"
+          example:
+            type: https://tools.ietf.org/html/rfc9110#section-15.5.1
+            title: One or more validation errors occurred.
+            status: 400
+            detail: One or more order lines were rejected by the product validation step.
+            instance: /api/v1/orders/checkout
+            errors:
+              items[0].productId: ["Product 999 does not exist in the catalog."]
+            correlationId: demo-0001
+            service: OrderService
+    NotFound:
+      description: Order not found (RFC 7807).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Conflict:
+      description: The order is not in a state that allows the operation (RFC 7807).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            type: urn:onlinestoresystem:problems:invalid-state-transition
+            title: Invalid order state
+            status: 409
+            detail: Order ORD-20261006-7KQ2M9XB is Completed; only Draft orders can be modified.
+    ServiceUnavailable:
+      description: CatalogService could not be reached even after the resilience pipeline gave up (RFC 7807).
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            type: urn:onlinestoresystem:problems:dependency-unavailable
+            title: CatalogService is unavailable
+            status: 503
+            detail: "CatalogService could not be reached (HttpRequestException: Connection refused). The request was retried with exponential backoff before giving up; please try again later."
+            dependency: CatalogService
+            correlationId: demo-0003
+            service: OrderService
+
+  schemas:
+    OrderStatus:
+      type: string
+      enum: [Draft, Pending, StockReserved, Completed, Cancelled]
+    SagaStatus:
+      type: string
+      enum: [Running, Compensating, Completed, Compensated, Failed]
+    SagaStepName:
+      type: string
+      enum: [ValidateProducts, CreateOrder, ReserveStock, ProcessPayment, CompleteOrder, ReleaseStock, Done]
+    SagaStepOutcome:
+      type: string
+      enum: [Started, Succeeded, Failed, Retrying, Compensating, Compensated, Skipped]
+
+    OrderLineRequest:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: integer
+          format: int32
+          minimum: 1
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 1000
+
+    CreateOrderRequest:
+      type: object
+      required: [customerId, customerEmail, items]
+      properties:
+        customerId:
+          type: string
+          minLength: 1
+          maxLength: 100
+        customerEmail:
+          type: string
+          format: email
+          maxLength: 256
+        items:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/OrderLineRequest"
+
+    UpdateOrderRequest:
+      $ref: "#/components/schemas/CreateOrderRequest"
+
+    PaymentDetails:
+      type: object
+      description: Card data. Encrypted at rest (ASP.NET Core Data Protection) until the payment step, then wiped.
+      required: [cardNumber, cardHolderName, expiryMonth, expiryYear]
+      properties:
+        cardNumber:
+          type: string
+          description: 12-19 digits passing the Luhn check (spaces/dashes allowed).
+          example: "4242424242424242"
+        cardHolderName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        expiryMonth:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 12
+        expiryYear:
+          type: integer
+          format: int32
+          minimum: 2000
+          maximum: 2100
+
+    CheckoutRequest:
+      type: object
+      required: [customerId, customerEmail, items, payment]
+      properties:
+        customerId:
+          type: string
+          minLength: 1
+          maxLength: 100
+        customerEmail:
+          type: string
+          format: email
+          maxLength: 256
+        items:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/OrderLineRequest"
+        payment:
+          $ref: "#/components/schemas/PaymentDetails"
+
+    SubmitOrderRequest:
+      type: object
+      required: [payment]
+      properties:
+        payment:
+          $ref: "#/components/schemas/PaymentDetails"
+
+    OrderItem:
+      type: object
+      required: [productId, sku, productName, unitPrice, quantity, lineTotal]
+      properties:
+        productId:
+          type: integer
+          format: int32
+        sku:
+          type: string
+        productName:
+          type: string
+        unitPrice:
+          type: number
+          format: decimal
+        quantity:
+          type: integer
+          format: int32
+        lineTotal:
+          type: number
+          format: decimal
+
+    SagaStep:
+      type: object
+      required: [stepName, outcome, occurredAtUtc]
+      properties:
+        stepName:
+          $ref: "#/components/schemas/SagaStepName"
+        outcome:
+          $ref: "#/components/schemas/SagaStepOutcome"
+        detail:
+          type: string
+          nullable: true
+        occurredAtUtc:
+          type: string
+          format: date-time
+
+    Saga:
+      type: object
+      nullable: true
+      description: State of the orchestrated checkout saga. `null` inside an Order that is still a Draft.
+      required: [sagaId, status, currentStep, stockReserved, paymentProcessed, retryCount, startedAtUtc, updatedAtUtc, steps]
+      properties:
+        sagaId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/SagaStatus"
+        currentStep:
+          $ref: "#/components/schemas/SagaStepName"
+        stockReserved:
+          type: boolean
+        paymentProcessed:
+          type: boolean
+        paymentId:
+          type: string
+          format: uuid
+          nullable: true
+        paymentCardLast4:
+          type: string
+          nullable: true
+          example: "4242"
+        retryCount:
+          type: integer
+          format: int32
+        lastError:
+          type: string
+          nullable: true
+        startedAtUtc:
+          type: string
+          format: date-time
+        updatedAtUtc:
+          type: string
+          format: date-time
+        completedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/SagaStep"
+
+    Order:
+      type: object
+      required: [orderId, orderNumber, customerId, customerEmail, status, totalAmount, currency, createdAtUtc, items]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        orderNumber:
+          type: string
+          example: ORD-20261006-7KQ2M9XB
+        customerId:
+          type: string
+        customerEmail:
+          type: string
+          format: email
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        totalAmount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        failureReason:
+          type: string
+          nullable: true
+        paymentId:
+          type: string
+          format: uuid
+          nullable: true
+        correlationId:
+          type: string
+          nullable: true
+          description: X-Correlation-Id of the request that created / checked out the order.
+        createdAtUtc:
+          type: string
+          format: date-time
+        updatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        saga:
+          $ref: "#/components/schemas/Saga"
+
+    OrderSummary:
+      type: object
+      required: [orderId, orderNumber, customerId, status, totalAmount, currency, itemCount, createdAtUtc]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        orderNumber:
+          type: string
+        customerId:
+          type: string
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        totalAmount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+        itemCount:
+          type: integer
+          format: int32
+        failureReason:
+          type: string
+          nullable: true
+        createdAtUtc:
+          type: string
+          format: date-time
+        updatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+
+    OrderSummaryPage:
+      type: object
+      required: [items, page, pageSize, totalCount, totalPages, hasNextPage]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderSummary"
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalCount:
+          type: integer
+          format: int32
+        totalPages:
+          type: integer
+          format: int32
+        hasNextPage:
+          type: boolean
+
+    ProblemDetails:
+      type: object
+      description: RFC 7807 / RFC 9457 problem document with OnlineStoreSystem extension members.
+      additionalProperties: true
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+          nullable: true
+        instance:
+          type: string
+          format: uri-reference
+        traceId:
+          type: string
+        correlationId:
+          type: string
+        service:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidationProblemDetails:
+      allOf:
+        - $ref: "#/components/schemas/ProblemDetails"
+        - type: object
+          properties:
+            errors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string

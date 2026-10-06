@@ -1,0 +1,420 @@
+# File: contracts/catalog-v1.yaml
+# Contract-first OpenAPI 3.0 specification of OnlineStoreSystem.CatalogService.
+# Written BEFORE the controller; served at http://localhost:5001/contracts/catalog-v1.yaml and
+# rendered by Swagger UI (http://localhost:5001/swagger) next to the document generated from code.
+openapi: 3.0.3
+info:
+  title: OnlineStoreSystem Catalog API
+  version: "1.0.0"
+  description: |
+    Product catalog of the OnlineStoreSystem e-commerce platform (database **CatalogDb**).
+
+    * URI versioning: every route starts with `/api/v1`.
+    * Errors use **RFC 7807 Problem Details** (`application/problem+json`) for 400, 404, 409 and 5xx.
+    * Every request may carry `X-Correlation-Id`; it is echoed in the response and logged by every service.
+    * OrderService calls `GET /api/v1/products?ids=...` synchronously (saga step *Validate Product*).
+  contact:
+    name: OnlineStoreSystem team
+  license:
+    name: MIT
+servers:
+  - url: http://localhost:5001
+    description: Local development (dotnet run)
+tags:
+  - name: Products
+    description: Product catalog CRUD
+
+paths:
+  /api/v1/products:
+    get:
+      tags: [Products]
+      operationId: listProducts
+      summary: List products (paged) or look up a batch of products by id
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+        - name: search
+          in: query
+          description: Case-insensitive match on name, SKU or description.
+          schema:
+            type: string
+            maxLength: 200
+        - name: category
+          in: query
+          description: Exact category name.
+          schema:
+            type: string
+            maxLength: 100
+        - name: ids
+          in: query
+          description: Batch lookup - repeat the parameter (`ids=1&ids=3`). At most 100 ids.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 100
+            items:
+              type: integer
+              format: int32
+              minimum: 1
+        - name: includeInactive
+          in: query
+          description: Include products that are no longer sold.
+          schema:
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of products.
+          headers:
+            X-Correlation-Id:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductPage"
+              example:
+                items:
+                  - productId: 1
+                    sku: KB-MECH-001
+                    name: Mechanical Keyboard
+                    description: Hot-swappable 75% mechanical keyboard with tactile switches and PBT keycaps.
+                    category: Peripherals
+                    price: 129.99
+                    currency: USD
+                    isActive: true
+                    createdAtUtc: "2026-10-06T09:00:00.000Z"
+                    updatedAtUtc: null
+                page: 1
+                pageSize: 20
+                totalCount: 1
+                totalPages: 1
+                hasNextPage: false
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      tags: [Products]
+      operationId: createProduct
+      summary: Create a product
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
+            example:
+              sku: TB-USB-006
+              name: USB-C Docking Station
+              description: 12-in-1 dock with dual HDMI and 100 W pass-through charging.
+              category: Peripherals
+              price: 189.00
+              currency: USD
+              isActive: true
+      responses:
+        "201":
+          description: Created. `Location` points to the new product.
+          headers:
+            Location:
+              description: URL of the created product.
+              schema:
+                type: string
+                format: uri
+            X-Correlation-Id:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/products/{productId}:
+    parameters:
+      - $ref: "#/components/parameters/ProductId"
+      - $ref: "#/components/parameters/CorrelationId"
+    get:
+      tags: [Products]
+      operationId: getProductById
+      summary: Get a product
+      responses:
+        "200":
+          description: The product.
+          headers:
+            X-Correlation-Id:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Products]
+      operationId: updateProduct
+      summary: Replace a product (full update)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductRequest"
+      responses:
+        "200":
+          description: The updated product.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [Products]
+      operationId: deleteProduct
+      summary: Delete a product
+      responses:
+        "204":
+          description: Deleted.
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  parameters:
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: Correlation id of the end-to-end operation. Generated by the service when absent.
+      schema:
+        type: string
+        maxLength: 64
+        pattern: "^[A-Za-z0-9._:-]{1,64}$"
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  headers:
+    CorrelationId:
+      description: The correlation id used for this request (echoed or generated).
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Validation failed (RFC 7807 validation problem).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ValidationProblemDetails"
+          example:
+            type: https://tools.ietf.org/html/rfc9110#section-15.5.1
+            title: One or more validation errors occurred.
+            status: 400
+            instance: /api/v1/products
+            errors:
+              Currency: ["Currency must be a 3-letter upper-case ISO 4217 code."]
+            traceId: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00
+            correlationId: 9f0c1b9e5d0a4c4d8f3e2a1b0c9d8e7f
+            service: CatalogService
+            timestamp: "2026-10-06T09:00:00.000+00:00"
+    NotFound:
+      description: The resource does not exist (RFC 7807).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            type: https://tools.ietf.org/html/rfc9110#section-15.5.5
+            title: Product not found
+            status: 404
+            detail: Product '42' does not exist.
+            instance: /api/v1/products/42
+            correlationId: 9f0c1b9e5d0a4c4d8f3e2a1b0c9d8e7f
+            service: CatalogService
+    Conflict:
+      description: Duplicate SKU or concurrent modification (RFC 7807).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+  schemas:
+    Product:
+      type: object
+      required: [productId, sku, name, category, price, currency, isActive, createdAtUtc]
+      properties:
+        productId:
+          type: integer
+          format: int32
+          example: 1
+        sku:
+          type: string
+          maxLength: 64
+          example: KB-MECH-001
+        name:
+          type: string
+          maxLength: 200
+          example: Mechanical Keyboard
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+        category:
+          type: string
+          maxLength: 100
+          example: Peripherals
+        price:
+          type: number
+          format: decimal
+          minimum: 0
+          example: 129.99
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          example: USD
+        isActive:
+          type: boolean
+        createdAtUtc:
+          type: string
+          format: date-time
+        updatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateProductRequest:
+      type: object
+      required: [sku, name, category, price, currency]
+      properties:
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[A-Za-z0-9][A-Za-z0-9-]{0,63}$"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+          default: General
+        price:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 1000000
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          default: USD
+        isActive:
+          type: boolean
+          default: true
+
+    UpdateProductRequest:
+      $ref: "#/components/schemas/CreateProductRequest"
+
+    ProductPage:
+      type: object
+      required: [items, page, pageSize, totalCount, totalPages, hasNextPage]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalCount:
+          type: integer
+          format: int32
+        totalPages:
+          type: integer
+          format: int32
+        hasNextPage:
+          type: boolean
+
+    ProblemDetails:
+      type: object
+      description: RFC 7807 / RFC 9457 problem document with OnlineStoreSystem extension members.
+      additionalProperties: true
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          description: Problem type URI (RFC 9110 section or urn:onlinestoresystem:problems:*).
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+          nullable: true
+        instance:
+          type: string
+          format: uri-reference
+        traceId:
+          type: string
+          description: W3C trace id of the request.
+        correlationId:
+          type: string
+          description: X-Correlation-Id of the request.
+        service:
+          type: string
+          description: Service that produced the problem.
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidationProblemDetails:
+      allOf:
+        - $ref: "#/components/schemas/ProblemDetails"
+        - type: object
+          properties:
+            errors:
+              type: object
+              description: Field name -> validation messages.
+              additionalProperties:
+                type: array
+                items:
+                  type: string
