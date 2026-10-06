@@ -1,0 +1,42 @@
+@* File: web/OnlineStoreSystem.Storefront/Views/Catalog/Details.cshtml *@
+@model ProductTileViewModel
+@{
+    var product = Model.Product;
+    ViewData["Title"] = product.Name;
+}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index">Catalog</a></li>
+        <li class="breadcrumb-item"><a asp-action="Index" asp-route-category="@product.Category">@product.Category</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@product.Name</li>
+    </ol>
+</nav>
+
+<div class="row g-4">
+    <div class="col-md-5">
+        <div class="product-art product-art-lg rounded-3 border" aria-hidden="true">@product.Name[..1]</div>
+    </div>
+    <div class="col-md-7">
+        <h1 class="h3">@product.Name</h1>
+        <p class="text-muted">SKU @product.Sku &middot; Product #@product.ProductId</p>
+        <p>@product.Description</p>
+        <p class="fs-3 fw-semibold mb-1">@product.Price.ToString("N2") <small class="text-muted fs-6">@product.Currency</small></p>
+        <p><span class="badge @Model.StockCss">@Model.StockLabel</span></p>
+
+        @if (product.Price == PaymentTestValues.DeclinedAmount)
+        {
+            <div class="alert alert-warning small">
+                Demo: an order total of exactly @PaymentTestValues.DeclinedAmount.ToString("N2") is declined by PaymentService,
+                so buying ONE of these triggers the saga compensation (stock is reserved, then released).
+            </div>
+        }
+
+        <form method="post" asp-controller="Orders" asp-action="AddToCart" class="d-flex gap-2 align-items-center">
+            <input type="hidden" name="productId" value="@product.ProductId" />
+            <input type="hidden" name="returnUrl" value="@Url.Action("Details", new { id = product.ProductId })" />
+            <label for="quantity" class="form-label mb-0">Quantity</label>
+            <input id="quantity" type="number" name="quantity" value="1" min="1" max="1000" class="form-control qty-input" />
+            <button type="submit" class="btn btn-primary" disabled="@(!Model.CanBuy)">Add to cart</button>
+        </form>
+    </div>
+</div>

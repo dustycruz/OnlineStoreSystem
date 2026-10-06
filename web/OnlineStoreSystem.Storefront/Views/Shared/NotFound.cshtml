@@ -1,0 +1,10 @@
+@* File: web/OnlineStoreSystem.Storefront/Views/Shared/NotFound.cshtml *@
+@model string
+@{
+    ViewData["Title"] = "Not found";
+}
+<div class="alert alert-warning">
+    <h1 class="h4">Not found</h1>
+    <p class="mb-0">@Model</p>
+</div>
+<a class="btn btn-outline-secondary" asp-controller="Catalog" asp-action="Index">Browse the catalog</a>

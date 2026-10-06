@@ -1,0 +1,52 @@
+@* File: web/OnlineStoreSystem.Storefront/Views/Catalog/Index.cshtml *@
+@model CatalogIndexViewModel
+@{
+    ViewData["Title"] = "Catalog";
+}
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-0">Catalog</h1>
+        <span class="text-muted small">@Model.TotalCount product(s) &middot; prices from CatalogService, availability from InventoryService</span>
+    </div>
+    <form method="get" asp-action="Index" class="d-flex gap-2" role="search">
+        <input type="search" name="search" value="@Model.Search" class="form-control" placeholder="Search name or SKU" aria-label="Search" />
+        <input type="text" name="category" value="@Model.Category" class="form-control" placeholder="Category" aria-label="Category" />
+        <button type="submit" class="btn btn-outline-primary">Search</button>
+    </form>
+</div>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-warning">
+        The catalog is temporarily unavailable: @Model.ErrorMessage
+    </div>
+}
+else if (Model.Products.Count == 0)
+{
+    <div class="alert alert-info">No products match your search.</div>
+}
+else
+{
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-4 g-4">
+        @foreach (var tile in Model.Products)
+        {
+            <div class="col">
+                <partial name="_ProductTile" model="tile" />
+            </div>
+        }
+    </div>
+
+    @if (Model.TotalPages > 1)
+    {
+        <nav class="mt-4" aria-label="Catalog pages">
+            <ul class="pagination justify-content-center">
+                @for (var p = 1; p <= Model.TotalPages; p++)
+                {
+                    <li class="page-item @(p == Model.Page ? "active" : null)">
+                        <a class="page-link" asp-action="Index" asp-route-page="@p" asp-route-search="@Model.Search" asp-route-category="@Model.Category">@p</a>
+                    </li>
+                }
+            </ul>
+        </nav>
+    }
+}

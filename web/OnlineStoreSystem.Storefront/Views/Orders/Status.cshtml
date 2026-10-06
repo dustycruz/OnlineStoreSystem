@@ -1,0 +1,142 @@
+@* File: web/OnlineStoreSystem.Storefront/Views/Orders/Status.cshtml *@
+@model OrderStatusViewModel
+@{
+    var order = Model.Order;
+    var saga = order.Saga;
+    ViewData["Title"] = $"Order {order.OrderNumber}";
+    if (Model.AutoRefreshSeconds is int seconds)
+    {
+        ViewData["AutoRefreshSeconds"] = seconds;
+    }
+}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h1 class="h3 mb-0">Order @order.OrderNumber</h1>
+        <span class="text-muted small">Placed @order.CreatedAtUtc.ToString("u") &middot; @order.CustomerEmail</span>
+    </div>
+    <span class="badge fs-6 @Model.StatusCss">@order.Status</span>
+</div>
+
+@if (!Model.IsFinal)
+{
+    <div class="alert alert-info d-flex align-items-center gap-2">
+        <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+        <span>
+            Your order is being processed (saga step <strong>@(saga?.CurrentStep ?? "-")</strong>).
+            This page refreshes automatically every @Model.AutoRefreshSeconds seconds.
+        </span>
+    </div>
+}
+else if (order.Status == OrderStatuses.Completed)
+{
+    <div class="alert alert-success">
+        <strong>Thank you!</strong> Payment <code>@order.PaymentId</code> was captured, the stock was committed and
+        the order is complete.
+    </div>
+}
+else if (order.Status == OrderStatuses.Cancelled)
+{
+    <div class="alert alert-danger">
+        <strong>Order cancelled.</strong> @order.FailureReason
+        @if (saga?.Status == SagaStatuses.Compensated)
+        {
+            <div class="mt-1 small">Compensation completed: the stock reserved for this order was released back to inventory.</div>
+        }
+        else if (saga?.Status == SagaStatuses.Failed && saga.CurrentStep == SagaSteps.ReleaseStock)
+        {
+            <div class="mt-1 small">Compensation could not be confirmed automatically - our team has been notified.</div>
+        }
+    </div>
+}
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header fw-semibold">Items</div>
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th class="text-end">Qty</th>
+                            <th class="text-end">Unit</th>
+                            <th class="text-end">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in order.Items)
+                        {
+                            <tr>
+                                <td>@item.ProductName <div class="small text-muted">@item.Sku</div></td>
+                                <td class="text-end">@item.Quantity</td>
+                                <td class="text-end">@item.UnitPrice.ToString("N2")</td>
+                                <td class="text-end">@item.LineTotal.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th colspan="3" class="text-end">Total</th>
+                            <th class="text-end">@order.TotalAmount.ToString("N2") @order.Currency</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header fw-semibold">Tracing</div>
+            <div class="card-body small">
+                <p class="mb-1">Checkout correlation id (<code>X-Correlation-Id</code>):</p>
+                <p><code class="fs-6">@(order.CorrelationId ?? "n/a")</code></p>
+                <p class="mb-0 text-muted">
+                    Every service logs this id. Run <code>grep @(order.CorrelationId) logs/*.log</code> in the repository
+                    to follow this order through Storefront, OrderService, CatalogService, InventoryService and PaymentService.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <span class="fw-semibold">Saga timeline</span>
+                @if (saga is not null)
+                {
+                    <span class="small">saga <code>@saga.SagaId.ToString()[..8]</code> &middot; <strong>@saga.Status</strong></span>
+                }
+            </div>
+            @if (saga is null)
+            {
+                <div class="card-body text-muted">This order has not been checked out yet (draft).</div>
+            }
+            else
+            {
+                <ol class="list-group list-group-flush list-group-numbered">
+                    @foreach (var step in saga.Steps)
+                    {
+                        <li class="list-group-item @OrderStatusViewModel.OutcomeCss(step.Outcome)">
+                            <div class="d-flex justify-content-between">
+                                <strong>@step.StepName</strong>
+                                <span class="small">@step.Outcome &middot; @step.OccurredAtUtc.ToString("HH:mm:ss.fff")</span>
+                            </div>
+                            @if (!string.IsNullOrEmpty(step.Detail))
+                            {
+                                <div class="small">@step.Detail</div>
+                            }
+                        </li>
+                    }
+                </ol>
+                @if (!string.IsNullOrEmpty(saga.LastError))
+                {
+                    <div class="card-footer small text-danger">Last error: @saga.LastError</div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<div class="mt-4 d-flex gap-2">
+    <a class="btn btn-outline-secondary" asp-controller="Catalog" asp-action="Index">Continue shopping</a>
+    <a class="btn btn-outline-primary" asp-action="Index">All my orders</a>
+</div>

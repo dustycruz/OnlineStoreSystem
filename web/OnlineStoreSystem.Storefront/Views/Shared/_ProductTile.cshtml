@@ -1,0 +1,29 @@
+@* File: web/OnlineStoreSystem.Storefront/Views/Shared/_ProductTile.cshtml *@
+@model ProductTileViewModel
+@{
+    var product = Model.Product;
+    var returnUrl = Context.Request.Path + Context.Request.QueryString;
+}
+<div class="card h-100 shadow-sm product-card">
+    <div class="product-art" aria-hidden="true">@product.Name[..1]</div>
+    <div class="card-body d-flex flex-column">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+            <span class="badge text-bg-light border">@product.Category</span>
+            <span class="badge @Model.StockCss">@Model.StockLabel</span>
+        </div>
+        <h5 class="card-title mt-2">
+            <a class="text-decoration-none"asp-controller="Catalog" asp-action="Details" asp-route-id="@product.ProductId">@product.Name</a>
+        </h5>
+        <p class="card-text small text-muted flex-grow-1">@product.Description</p>
+        <div class="d-flex justify-content-between align-items-center">
+            <span class="fs-5 fw-semibold">@product.Price.ToString("N2") <small class="text-muted">@product.Currency</small></span>
+            <form method="post" asp-controller="Orders" asp-action="AddToCart" class="d-flex gap-1">
+                <input type="hidden" name="productId" value="@product.ProductId" />
+                <input type="hidden" name="returnUrl" value="@returnUrl" />
+                <input type="number" name="quantity" value="1" min="1" max="1000" class="form-control form-control-sm qty-input" aria-label="Quantity" />
+                <button type="submit" class="btn btn-sm btn-primary" disabled="@(!Model.CanBuy)">Add</button>
+            </form>
+        </div>
+        <div class="small text-muted mt-2">SKU @product.Sku</div>
+    </div>
+</div>

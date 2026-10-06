@@ -1,0 +1,40 @@
+@* File: web/OnlineStoreSystem.Storefront/Views/Home/Index.cshtml *@
+@model HomeViewModel
+@{
+    ViewData["Title"] = "Home";
+}
+<section class="p-4 p-md-5 mb-4 bg-body-tertiary rounded-3 border">
+    <h1 class="display-6 fw-semibold">Welcome to OnlineStoreSystem</h1>
+    <p class="lead mb-3">
+        A distributed e-commerce demo: every checkout runs an <strong>orchestrated saga</strong> across
+        CatalogService, InventoryService (RabbitMQ) and PaymentService - with compensation when payment fails.
+    </p>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-primary btn-lg" asp-controller="Catalog" asp-action="Index">Browse the catalog</a>
+        <a class="btn btn-outline-secondary btn-lg" asp-controller="Orders" asp-action="Index">My orders</a>
+    </div>
+    <hr />
+    <p class="small text-muted mb-0">
+        Demo tips: pay with <code>4242 4242 4242 4242</code> for a successful order. Use
+        <code>@PaymentTestValues.DeclinedCard</code>, or buy exactly one <em>Cinema Camera Pro 8K</em>
+        (total <code>@PaymentTestValues.DeclinedAmount.ToString("N2")</code>), to watch the payment fail and the
+        reserved stock being released (compensation).
+    </p>
+</section>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-warning">Products could not be loaded: @Model.ErrorMessage</div>
+}
+else
+{
+    <h2 class="h4 mb-3">Featured products</h2>
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-4">
+        @foreach (var tile in Model.Featured)
+        {
+            <div class="col">
+                <partial name="_ProductTile" model="tile" />
+            </div>
+        }
+    </div>
+}

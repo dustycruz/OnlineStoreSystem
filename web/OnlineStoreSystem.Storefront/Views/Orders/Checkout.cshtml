@@ -1,0 +1,92 @@
+@* File: web/OnlineStoreSystem.Storefront/Views/Orders/Checkout.cshtml *@
+@model CheckoutViewModel
+@{
+    ViewData["Title"] = "Checkout";
+}
+<h1 class="h3 mb-4">Checkout</h1>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <form method="post" asp-action="Checkout" novalidate>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="card mb-3">
+                <div class="card-header fw-semibold">Contact</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label asp-for="Email" class="form-label"></label>
+                        <input asp-for="Email" class="form-control" autocomplete="email" />
+                        <span asp-validation-for="Email" class="text-danger small"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header fw-semibold">Payment</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label asp-for="CardHolderName" class="form-label"></label>
+                        <input asp-for="CardHolderName" class="form-control" autocomplete="cc-name" />
+                        <span asp-validation-for="CardHolderName" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="CardNumber" class="form-label"></label>
+                        <input asp-for="CardNumber" class="form-control font-monospace" autocomplete="cc-number" inputmode="numeric" />
+                        <span asp-validation-for="CardNumber" class="text-danger small"></span>
+                        <div class="form-text">
+                            Test cards: <code>4242 4242 4242 4242</code> approved &middot;
+                            <code>4000 0000 0000 0002</code> declined (triggers compensation) &middot;
+                            <code>4000 0000 0000 9995</code> insufficient funds.
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label asp-for="ExpiryMonth" class="form-label"></label>
+                            <input asp-for="ExpiryMonth" class="form-control" min="1" max="12" />
+                            <span asp-validation-for="ExpiryMonth" class="text-danger small"></span>
+                        </div>
+                        <div class="col-6">
+                            <label asp-for="ExpiryYear" class="form-label"></label>
+                            <input asp-for="ExpiryYear" class="form-control" min="2000" max="2100" />
+                            <span asp-validation-for="ExpiryYear" class="text-danger small"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-success btn-lg w-100">
+                Place order (@Model.Cart.Total.ToString("N2") @Model.Cart.Currency)
+            </button>
+            <p class="small text-muted mt-2 mb-0">
+                Your order is accepted immediately and then processed by the saga: product validation &rarr; stock
+                reservation &rarr; payment. You will be redirected to a live status page.
+            </p>
+        </form>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header fw-semibold">Order summary</div>
+            <ul class="list-group list-group-flush">
+                @foreach (var line in Model.Cart.Lines)
+                {
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>@line.Quantity &times; @line.Name</span>
+                        <span>@line.LineTotal.ToString("N2") @line.Currency</span>
+                    </li>
+                }
+                <li class="list-group-item d-flex justify-content-between fw-semibold">
+                    <span>Total</span>
+                    <span>@Model.Cart.Total.ToString("N2") @Model.Cart.Currency</span>
+                </li>
+            </ul>
+            @if (Model.Cart.Total == PaymentTestValues.DeclinedAmount)
+            {
+                <div class="card-footer small text-warning-emphasis bg-warning-subtle">
+                    This total (@PaymentTestValues.DeclinedAmount.ToString("N2")) is deterministically declined by PaymentService:
+                    you will see the compensation path.
+                </div>
+            }
+        </div>
+    </div>
+</div>

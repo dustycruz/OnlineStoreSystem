@@ -1,0 +1,40 @@
+/* File: web/OnlineStoreSystem.Storefront/wwwroot/css/site.css */
+:root {
+    --store-accent: #0d6efd;
+}
+
+.product-card .product-art {
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3.5rem;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #0d6efd 0%, #6f42c1 100%);
+    border-top-left-radius: var(--bs-card-inner-border-radius);
+    border-top-right-radius: var(--bs-card-inner-border-radius);
+}
+
+.product-art-lg {
+    height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7rem;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #0d6efd 0%, #6f42c1 100%);
+}
+
+.qty-input {
+    width: 5rem;
+}
+
+.list-group-numbered > .list-group-item::before {
+    font-weight: 600;
+}
+
+footer code {
+    word-break: break-all;
+}

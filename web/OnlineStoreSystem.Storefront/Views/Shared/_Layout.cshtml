@@ -1,0 +1,78 @@
+@* File: web/OnlineStoreSystem.Storefront/Views/Shared/_Layout.cshtml *@
+@inject OnlineStoreSystem.Storefront.Services.CartService Cart
+@{
+    var cartCount = Cart.ItemCount;
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString();
+    var action = ViewContext.RouteData.Values["action"]?.ToString();
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    @if (ViewData["AutoRefreshSeconds"] is int refreshSeconds)
+    {
+        <meta http-equiv="refresh" content="@refreshSeconds" />
+    }
+    <title>@ViewData["Title"] - OnlineStoreSystem</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="d-flex flex-column min-vh-100">
+    <header>
+        <nav class="navbar navbar-expand-md navbar-dark bg-dark shadow-sm">
+            <div class="container">
+                <a class="navbar-brand fw-semibold" asp-controller="Home" asp-action="Index">OnlineStore<span class="text-info">System</span></a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav"
+                        aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="mainNav">
+                    <ul class="navbar-nav me-auto">
+                        <li class="nav-item">
+                            <a class="nav-link @(controller == "Home" ? "active" : null)" asp-controller="Home" asp-action="Index">Home</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link @(controller == "Catalog" ? "active" : null)" asp-controller="Catalog" asp-action="Index">Catalog</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link @(controller == "Orders" && action == "Index" ? "active" : null)" asp-controller="Orders" asp-action="Index">My orders</a>
+                        </li>
+                    </ul>
+                    <a class="btn btn-outline-light" asp-controller="Orders" asp-action="Cart">
+                        Cart <span class="badge text-bg-info ms-1">@cartCount</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container py-4 flex-grow-1">
+        @if (TempData["Flash"] is string flash)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @flash
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+        @if (TempData["Error"] is string error)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @error
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+        @RenderBody()
+    </main>
+
+    <footer class="border-top bg-light py-3 mt-auto">
+        <div class="container small text-muted d-flex flex-wrap justify-content-between gap-2">
+            <span>OnlineStoreSystem &middot; .NET 10 microservices demo (Catalog &middot; Orders &middot; Inventory &middot; Payment)</span>
+            <span>X-Correlation-Id of this page: <code>@Context.CorrelationId</code></span>
+        </div>
+    </footer>
+
+    <script src="~/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
