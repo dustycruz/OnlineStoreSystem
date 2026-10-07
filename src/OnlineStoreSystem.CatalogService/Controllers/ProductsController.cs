@@ -2,10 +2,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OnlineStoreSystem.CatalogService.Data;
-using OnlineStoreSystem.CatalogService.Data.Entities;
 using OnlineStoreSystem.CatalogService.Mapping;
-using OnlineStoreSystem.Shared.Contracts.Catalog;
-using OnlineStoreSystem.Shared.Contracts.Common;
+using OnlineStoreSystem.CatalogService.Models;
+using OnlineStoreSystem.Shared.DTOs;
 using OnlineStoreSystem.Shared.Problems;
 
 namespace OnlineStoreSystem.CatalogService.Controllers;

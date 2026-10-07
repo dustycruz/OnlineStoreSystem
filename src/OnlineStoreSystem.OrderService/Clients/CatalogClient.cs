@@ -1,7 +1,6 @@
 // File: src/OnlineStoreSystem.OrderService/Clients/CatalogClient.cs
 using System.Net;
-using OnlineStoreSystem.Shared.Contracts.Catalog;
-using OnlineStoreSystem.Shared.Contracts.Common;
+using OnlineStoreSystem.Shared.DTOs;
 using OnlineStoreSystem.Shared.Http;
 using OnlineStoreSystem.Shared.Json;
 using Polly.CircuitBreaker;

@@ -2,14 +2,14 @@
 // SCAFFOLDED (database-first) - reverse-engineered from OrderDb with:
 //   dotnet ef dbcontext scaffold "Server=(localdb)\mssqllocaldb;Database=OrderDb;Trusted_Connection=True;TrustServerCertificate=True"
 //     Microsoft.EntityFrameworkCore.SqlServer --project src/OnlineStoreSystem.OrderService
-//     --context OrderDbContext --context-dir Data --output-dir Data/Entities
-//     --namespace OnlineStoreSystem.OrderService.Data.Entities
+//     --context OrderDbContext --context-dir Data --output-dir Models
+//     --namespace OnlineStoreSystem.OrderService.Models
 //     --context-namespace OnlineStoreSystem.OrderService.Data --no-onconfiguring --force
 //   Do not edit by hand: re-run the command after changing sql/04_OrderDb.sql.
 using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
-using OnlineStoreSystem.OrderService.Data.Entities;
+using OnlineStoreSystem.OrderService.Models;
 
 namespace OnlineStoreSystem.OrderService.Data;
 
@@ -40,16 +40,16 @@ public partial class OrderDbContext : DbContext
 
             entity.HasIndex(e => e.OrderNumber, "UX_Orders_OrderNumber").IsUnique();
 
-            entity.Property(e => e.OrderId).HasDefaultValueSql("(newsequentialid())");
+            entity.Property(e => e.OrderId).HasDefaultValueSql("(newsequentialid())", "DF_Orders_OrderId");
             entity.Property(e => e.CorrelationId).HasMaxLength(64);
             entity.Property(e => e.CreatedAtUtc)
                 .HasPrecision(3)
-                .HasDefaultValueSql("(sysutcdatetime())");
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_Orders_CreatedAtUtc");
             entity.Property(e => e.Currency)
                 .HasMaxLength(3)
                 .IsUnicode(false)
-                .HasDefaultValue("USD")
-                .IsFixedLength();
+                .IsFixedLength()
+                .HasDefaultValue("USD", "DF_Orders_Currency");
             entity.Property(e => e.CustomerEmail).HasMaxLength(256);
             entity.Property(e => e.CustomerId).HasMaxLength(100);
             entity.Property(e => e.FailureReason).HasMaxLength(1000);
@@ -86,7 +86,7 @@ public partial class OrderDbContext : DbContext
             entity.Property(e => e.CorrelationId).HasMaxLength(64);
             entity.Property(e => e.CreatedAtUtc)
                 .HasPrecision(3)
-                .HasDefaultValueSql("(sysutcdatetime())");
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_OutboxMessages_CreatedAtUtc");
             entity.Property(e => e.LastError).HasMaxLength(2000);
             entity.Property(e => e.MessageType).HasMaxLength(200);
             entity.Property(e => e.ProcessedAtUtc).HasPrecision(3);
@@ -101,7 +101,7 @@ public partial class OrderDbContext : DbContext
 
             entity.HasIndex(e => e.OrderId, "UX_SagaStates_OrderId").IsUnique();
 
-            entity.Property(e => e.SagaId).HasDefaultValueSql("(newsequentialid())");
+            entity.Property(e => e.SagaId).HasDefaultValueSql("(newsequentialid())", "DF_SagaStates_SagaId");
             entity.Property(e => e.CompletedAtUtc).HasPrecision(3);
             entity.Property(e => e.CorrelationId).HasMaxLength(64);
             entity.Property(e => e.CurrentStep).HasMaxLength(50);
@@ -116,11 +116,11 @@ public partial class OrderDbContext : DbContext
                 .IsConcurrencyToken();
             entity.Property(e => e.StartedAtUtc)
                 .HasPrecision(3)
-                .HasDefaultValueSql("(sysutcdatetime())");
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_SagaStates_StartedAtUtc");
             entity.Property(e => e.Status).HasMaxLength(30);
             entity.Property(e => e.UpdatedAtUtc)
                 .HasPrecision(3)
-                .HasDefaultValueSql("(sysutcdatetime())");
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_SagaStates_UpdatedAtUtc");
 
             entity.HasOne(d => d.Order).WithOne(p => p.SagaState)
                 .HasForeignKey<SagaState>(d => d.OrderId)
@@ -134,7 +134,7 @@ public partial class OrderDbContext : DbContext
             entity.Property(e => e.Detail).HasMaxLength(2000);
             entity.Property(e => e.OccurredAtUtc)
                 .HasPrecision(3)
-                .HasDefaultValueSql("(sysutcdatetime())");
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_SagaStepLogs_OccurredAtUtc");
             entity.Property(e => e.Outcome).HasMaxLength(20);
             entity.Property(e => e.StepName).HasMaxLength(50);
 

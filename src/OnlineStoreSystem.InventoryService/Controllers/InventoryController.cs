@@ -2,11 +2,11 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OnlineStoreSystem.InventoryService.Data;
-using OnlineStoreSystem.InventoryService.Data.Entities;
 using OnlineStoreSystem.InventoryService.Mapping;
+using OnlineStoreSystem.InventoryService.Models;
 using OnlineStoreSystem.InventoryService.Services;
-using OnlineStoreSystem.Shared.Contracts.Inventory;
 using OnlineStoreSystem.Shared.Correlation;
+using OnlineStoreSystem.Shared.DTOs;
 using OnlineStoreSystem.Shared.Problems;
 
 namespace OnlineStoreSystem.InventoryService.Controllers;

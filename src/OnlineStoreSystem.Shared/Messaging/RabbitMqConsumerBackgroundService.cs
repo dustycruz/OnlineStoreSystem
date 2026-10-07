@@ -52,7 +52,7 @@ public abstract class RabbitMqConsumerBackgroundService : BackgroundService
 
     protected ILogger Logger { get; }
 
-    /// <summary>Queue to consume from (declared in <see cref="MessagingTopology"/>).</summary>
+    /// <summary>Queue to consume from (declared in <see cref="RabbitMqConfiguration"/>).</summary>
     protected abstract string QueueName { get; }
 
     /// <summary>Name stored in the idempotency ledger; defaults to the class name.</summary>
@@ -71,7 +71,7 @@ public abstract class RabbitMqConsumerBackgroundService : BackgroundService
         IServiceProvider services,
         CancellationToken cancellationToken);
 
-    private string DeadLetterQueue => MessagingTopology.DeadLetterQueueName(QueueName, _options);
+    private string DeadLetterQueue => RabbitMqConfiguration.DeadLetterQueueName(QueueName, _options);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -115,7 +115,7 @@ public abstract class RabbitMqConsumerBackgroundService : BackgroundService
     {
         var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
 
-        await RabbitMqTopology.DeclareAsync(channel, _options, cancellationToken);
+        await RabbitMqConfiguration.DeclareTopologyAsync(channel, _options, cancellationToken);
 
         // Fair dispatch: at most PrefetchCount un-ACKed messages in flight on this channel.
         await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: _options.PrefetchCount, global: false,

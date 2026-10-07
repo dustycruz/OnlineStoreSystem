@@ -1,7 +1,7 @@
 // File: src/OnlineStoreSystem.CatalogService/Mapping/ProductMappings.cs
 using System.Linq.Expressions;
-using OnlineStoreSystem.CatalogService.Data.Entities;
-using OnlineStoreSystem.Shared.Contracts.Catalog;
+using OnlineStoreSystem.CatalogService.Models;
+using OnlineStoreSystem.Shared.DTOs;
 
 namespace OnlineStoreSystem.CatalogService.Mapping;
 

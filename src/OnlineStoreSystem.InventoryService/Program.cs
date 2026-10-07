@@ -1,8 +1,8 @@
 // File: src/OnlineStoreSystem.InventoryService/Program.cs
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
+using OnlineStoreSystem.InventoryService.BackgroundServices;
 using OnlineStoreSystem.InventoryService.Data;
-using OnlineStoreSystem.InventoryService.Messaging;
 using OnlineStoreSystem.InventoryService.Services;
 using OnlineStoreSystem.Shared.Correlation;
 using OnlineStoreSystem.Shared.Hosting;

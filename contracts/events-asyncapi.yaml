@@ -6,7 +6,7 @@ info:
   title: OnlineStoreSystem integration events
   version: "1.0.0"
   description: |
-    Topology (declared idempotently by every service on startup - see Shared/Messaging/MessagingTopology.cs):
+    Topology (declared idempotently by every service on startup - see Shared/Messaging/RabbitMqConfiguration.cs):
 
     ```
     exchange onlinestore.events (topic, durable)

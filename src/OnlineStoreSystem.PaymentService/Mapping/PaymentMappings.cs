@@ -1,6 +1,6 @@
 // File: src/OnlineStoreSystem.PaymentService/Mapping/PaymentMappings.cs
-using OnlineStoreSystem.PaymentService.Data.Entities;
-using OnlineStoreSystem.Shared.Contracts.Payments;
+using OnlineStoreSystem.PaymentService.Models;
+using OnlineStoreSystem.Shared.DTOs;
 
 namespace OnlineStoreSystem.PaymentService.Mapping;
 

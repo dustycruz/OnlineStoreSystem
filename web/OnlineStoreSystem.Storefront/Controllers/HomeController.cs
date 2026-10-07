@@ -8,14 +8,13 @@ using OnlineStoreSystem.Storefront.Models;
 namespace OnlineStoreSystem.Storefront.Controllers;
 
 public sealed class HomeController(
-    CatalogApiClient catalogApi,
-    InventoryApiClient inventoryApi,
+    StorefrontApiClient api,
     ILogger<HomeController> logger) : Controller
 {
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
-        var productsTask = catalogApi.GetProductsAsync(null, null, 1, 4, cancellationToken);
-        var stockTask = inventoryApi.GetStockLevelsAsync(cancellationToken);
+        var productsTask = api.GetProductsAsync(null, null, 1, 4, cancellationToken);
+        var stockTask = api.GetStockLevelsAsync(cancellationToken);
         await Task.WhenAll(productsTask, stockTask);
 
         var products = await productsTask;

@@ -1,8 +1,8 @@
 // File: src/OnlineStoreSystem.InventoryService/Services/StockReservationService.cs
 using Microsoft.EntityFrameworkCore;
 using OnlineStoreSystem.InventoryService.Data;
-using OnlineStoreSystem.InventoryService.Data.Entities;
-using OnlineStoreSystem.Shared.Contracts.Inventory;
+using OnlineStoreSystem.InventoryService.Models;
+using OnlineStoreSystem.Shared.DTOs;
 using OnlineStoreSystem.Shared.Events;
 
 namespace OnlineStoreSystem.InventoryService.Services;

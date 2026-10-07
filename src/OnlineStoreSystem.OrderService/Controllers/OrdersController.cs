@@ -3,11 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OnlineStoreSystem.OrderService.Application;
 using OnlineStoreSystem.OrderService.Data;
-using OnlineStoreSystem.OrderService.Data.Entities;
 using OnlineStoreSystem.OrderService.Mapping;
+using OnlineStoreSystem.OrderService.Models;
 using OnlineStoreSystem.OrderService.Saga;
-using OnlineStoreSystem.Shared.Contracts.Common;
-using OnlineStoreSystem.Shared.Contracts.Orders;
+using OnlineStoreSystem.Shared.DTOs;
 using OnlineStoreSystem.Shared.Problems;
 
 namespace OnlineStoreSystem.OrderService.Controllers;

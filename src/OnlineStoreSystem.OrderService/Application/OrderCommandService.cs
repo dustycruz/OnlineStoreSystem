@@ -1,9 +1,9 @@
 // File: src/OnlineStoreSystem.OrderService/Application/OrderCommandService.cs
 using Microsoft.EntityFrameworkCore;
 using OnlineStoreSystem.OrderService.Data;
-using OnlineStoreSystem.OrderService.Data.Entities;
-using OnlineStoreSystem.Shared.Contracts.Orders;
+using OnlineStoreSystem.OrderService.Models;
 using OnlineStoreSystem.Shared.Correlation;
+using OnlineStoreSystem.Shared.DTOs;
 using OnlineStoreSystem.Shared.Identifiers;
 
 namespace OnlineStoreSystem.OrderService.Application;

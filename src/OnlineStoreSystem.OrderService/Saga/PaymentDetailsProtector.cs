@@ -2,7 +2,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
-using OnlineStoreSystem.Shared.Contracts.Orders;
+using OnlineStoreSystem.Shared.DTOs;
 using OnlineStoreSystem.Shared.Validation;
 
 namespace OnlineStoreSystem.OrderService.Saga;

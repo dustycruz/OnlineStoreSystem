@@ -1,6 +1,6 @@
 // File: src/OnlineStoreSystem.OrderService/Application/ProductValidator.cs
 using OnlineStoreSystem.OrderService.Clients;
-using OnlineStoreSystem.Shared.Contracts.Orders;
+using OnlineStoreSystem.Shared.DTOs;
 
 namespace OnlineStoreSystem.OrderService.Application;
 

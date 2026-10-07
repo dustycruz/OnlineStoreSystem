@@ -33,8 +33,8 @@ foreach ($t in $targets) {
         --startup-project $project `
         --context $t.Context `
         --context-dir Data `
-        --output-dir Data/Entities `
-        --namespace "OnlineStoreSystem.$($t.Service).Data.Entities" `
+        --output-dir Models `
+        --namespace "OnlineStoreSystem.$($t.Service).Models" `
         --context-namespace "OnlineStoreSystem.$($t.Service).Data" `
         --no-onconfiguring `
         --force

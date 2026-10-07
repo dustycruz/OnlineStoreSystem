@@ -1,6 +1,6 @@
 // File: src/OnlineStoreSystem.InventoryService/Data/InventoryDbContext.Customizations.cs
 using Microsoft.EntityFrameworkCore;
-using OnlineStoreSystem.InventoryService.Data.Entities;
+using OnlineStoreSystem.InventoryService.Models;
 
 namespace OnlineStoreSystem.InventoryService.Data;
 

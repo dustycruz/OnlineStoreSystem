@@ -2,14 +2,14 @@
 // SCAFFOLDED (database-first) - reverse-engineered from PaymentDb with:
 //   dotnet ef dbcontext scaffold "Server=(localdb)\mssqllocaldb;Database=PaymentDb;Trusted_Connection=True;TrustServerCertificate=True"
 //     Microsoft.EntityFrameworkCore.SqlServer --project src/OnlineStoreSystem.PaymentService
-//     --context PaymentDbContext --context-dir Data --output-dir Data/Entities
-//     --namespace OnlineStoreSystem.PaymentService.Data.Entities
+//     --context PaymentDbContext --context-dir Data --output-dir Models
+//     --namespace OnlineStoreSystem.PaymentService.Models
 //     --context-namespace OnlineStoreSystem.PaymentService.Data --no-onconfiguring --force
 //   Do not edit by hand: re-run the command after changing sql/03_PaymentDb.sql.
 using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
-using OnlineStoreSystem.PaymentService.Data.Entities;
+using OnlineStoreSystem.PaymentService.Models;
 
 namespace OnlineStoreSystem.PaymentService.Data;
 
@@ -32,12 +32,12 @@ public partial class PaymentDbContext : DbContext
 
             entity.HasIndex(e => e.PaymentId, "IX_PaymentRefunds_PaymentId");
 
-            entity.Property(e => e.RefundId).HasDefaultValueSql("(newsequentialid())");
+            entity.Property(e => e.RefundId).HasDefaultValueSql("(newsequentialid())", "DF_PaymentRefunds_RefundId");
             entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.CorrelationId).HasMaxLength(64);
             entity.Property(e => e.CreatedAtUtc)
                 .HasPrecision(3)
-                .HasDefaultValueSql("(sysutcdatetime())");
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_PaymentRefunds_CreatedAtUtc");
             entity.Property(e => e.Reason).HasMaxLength(500);
 
             entity.HasOne(d => d.Payment).WithMany(p => p.PaymentRefunds)
@@ -56,7 +56,7 @@ public partial class PaymentDbContext : DbContext
                 .IsUnique()
                 .HasFilter("([IdempotencyKey] IS NOT NULL)");
 
-            entity.Property(e => e.PaymentId).HasDefaultValueSql("(newsequentialid())");
+            entity.Property(e => e.PaymentId).HasDefaultValueSql("(newsequentialid())", "DF_PaymentTransactions_PaymentId");
             entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.CardBrand).HasMaxLength(20);
             entity.Property(e => e.CardHolderName).HasMaxLength(200);
@@ -67,7 +67,7 @@ public partial class PaymentDbContext : DbContext
             entity.Property(e => e.CorrelationId).HasMaxLength(64);
             entity.Property(e => e.CreatedAtUtc)
                 .HasPrecision(3)
-                .HasDefaultValueSql("(sysutcdatetime())");
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_PaymentTransactions_CreatedAtUtc");
             entity.Property(e => e.Currency)
                 .HasMaxLength(3)
                 .IsUnicode(false)

@@ -1,6 +1,6 @@
 // File: web/OnlineStoreSystem.Storefront/Services/CartService.cs
 using System.Text.Json;
-using OnlineStoreSystem.Shared.Contracts.Catalog;
+using OnlineStoreSystem.Shared.DTOs;
 using OnlineStoreSystem.Storefront.Models;
 
 namespace OnlineStoreSystem.Storefront.Services;

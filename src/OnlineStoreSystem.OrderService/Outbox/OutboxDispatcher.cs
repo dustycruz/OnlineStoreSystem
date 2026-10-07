@@ -10,7 +10,7 @@ namespace OnlineStoreSystem.OrderService.Outbox;
 
 /// <summary>
 /// Transactional-outbox relay. Reads pending <c>OutboxMessages</c> in creation order and publishes them through
-/// <see cref="RabbitMqEventPublisher"/> (publisher confirms). A row is marked processed only AFTER the broker
+/// <see cref="RabbitMqPublisher"/> (publisher confirms). A row is marked processed only AFTER the broker
 /// confirmed it, so a crash or a broker outage never loses an event (at-least-once; consumers are idempotent).
 /// On a failure the batch stops to preserve ordering and is retried after a back-off.
 /// </summary>

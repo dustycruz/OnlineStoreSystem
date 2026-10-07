@@ -2,14 +2,14 @@
 // SCAFFOLDED (database-first) - reverse-engineered from InventoryDb with:
 //   dotnet ef dbcontext scaffold "Server=(localdb)\mssqllocaldb;Database=InventoryDb;Trusted_Connection=True;TrustServerCertificate=True"
 //     Microsoft.EntityFrameworkCore.SqlServer --project src/OnlineStoreSystem.InventoryService
-//     --context InventoryDbContext --context-dir Data --output-dir Data/Entities
-//     --namespace OnlineStoreSystem.InventoryService.Data.Entities
+//     --context InventoryDbContext --context-dir Data --output-dir Models
+//     --namespace OnlineStoreSystem.InventoryService.Models
 //     --context-namespace OnlineStoreSystem.InventoryService.Data --no-onconfiguring --force
 //   Do not edit by hand: customisations live in InventoryDbContext.Customizations.cs.
 using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
-using OnlineStoreSystem.InventoryService.Data.Entities;
+using OnlineStoreSystem.InventoryService.Models;
 
 namespace OnlineStoreSystem.InventoryService.Data;
 
@@ -36,9 +36,9 @@ public partial class InventoryDbContext : DbContext
 
             entity.Property(e => e.CreatedAtUtc)
                 .HasPrecision(3)
-                .HasDefaultValueSql("(sysutcdatetime())");
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_InventoryItems_CreatedAtUtc");
             entity.Property(e => e.QuantityAvailable).HasComputedColumnSql("([QuantityOnHand]-[QuantityReserved])", true);
-            entity.Property(e => e.ReorderThreshold).HasDefaultValue(5);
+            entity.Property(e => e.ReorderThreshold).HasDefaultValue(5, "DF_InventoryItems_ReorderThreshold");
             entity.Property(e => e.RowVersion)
                 .IsRowVersion()
                 .IsConcurrencyToken();
@@ -57,7 +57,7 @@ public partial class InventoryDbContext : DbContext
             entity.Property(e => e.MessageType).HasMaxLength(200);
             entity.Property(e => e.ProcessedAtUtc)
                 .HasPrecision(3)
-                .HasDefaultValueSql("(sysutcdatetime())");
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_ProcessedMessages_ProcessedAtUtc");
         });
 
         modelBuilder.Entity<StockReservation>(entity =>
@@ -71,7 +71,7 @@ public partial class InventoryDbContext : DbContext
             entity.Property(e => e.CorrelationId).HasMaxLength(64);
             entity.Property(e => e.CreatedAtUtc)
                 .HasPrecision(3)
-                .HasDefaultValueSql("(sysutcdatetime())");
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_StockReservations_CreatedAtUtc");
             entity.Property(e => e.Status).HasMaxLength(20);
             entity.Property(e => e.UpdatedAtUtc).HasPrecision(3);
 

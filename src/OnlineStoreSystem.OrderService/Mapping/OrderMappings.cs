@@ -1,6 +1,6 @@
 // File: src/OnlineStoreSystem.OrderService/Mapping/OrderMappings.cs
-using OnlineStoreSystem.OrderService.Data.Entities;
-using OnlineStoreSystem.Shared.Contracts.Orders;
+using OnlineStoreSystem.OrderService.Models;
+using OnlineStoreSystem.Shared.DTOs;
 
 namespace OnlineStoreSystem.OrderService.Mapping;
 

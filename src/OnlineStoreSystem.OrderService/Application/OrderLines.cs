@@ -1,5 +1,5 @@
 // File: src/OnlineStoreSystem.OrderService/Application/OrderLines.cs
-using OnlineStoreSystem.OrderService.Data.Entities;
+using OnlineStoreSystem.OrderService.Models;
 
 namespace OnlineStoreSystem.OrderService.Application;
 

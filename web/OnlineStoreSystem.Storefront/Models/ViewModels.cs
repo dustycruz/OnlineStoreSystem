@@ -1,9 +1,7 @@
 // File: web/OnlineStoreSystem.Storefront/Models/ViewModels.cs
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
-using OnlineStoreSystem.Shared.Contracts.Catalog;
-using OnlineStoreSystem.Shared.Contracts.Inventory;
-using OnlineStoreSystem.Shared.Contracts.Orders;
+using OnlineStoreSystem.Shared.DTOs;
 using OnlineStoreSystem.Shared.Validation;
 
 namespace OnlineStoreSystem.Storefront.Models;

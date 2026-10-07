@@ -27,8 +27,8 @@ scaffold() {
     --startup-project "$project" \
     --context "$context" \
     --context-dir Data \
-    --output-dir Data/Entities \
-    --namespace "OnlineStoreSystem.${service}.Data.Entities" \
+    --output-dir Models \
+    --namespace "OnlineStoreSystem.${service}.Models" \
     --context-namespace "OnlineStoreSystem.${service}.Data" \
     --no-onconfiguring \
     --force

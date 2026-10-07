@@ -1,6 +1,6 @@
 // File: src/OnlineStoreSystem.OrderService/Clients/PaymentClient.cs
 using System.Net;
-using OnlineStoreSystem.Shared.Contracts.Payments;
+using OnlineStoreSystem.Shared.DTOs;
 using OnlineStoreSystem.Shared.Http;
 using OnlineStoreSystem.Shared.Json;
 

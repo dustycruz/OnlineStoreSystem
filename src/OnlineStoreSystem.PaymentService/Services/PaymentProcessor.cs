@@ -4,8 +4,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using OnlineStoreSystem.PaymentService.Data;
-using OnlineStoreSystem.PaymentService.Data.Entities;
-using OnlineStoreSystem.Shared.Contracts.Payments;
+using OnlineStoreSystem.PaymentService.Models;
+using OnlineStoreSystem.Shared.DTOs;
 using OnlineStoreSystem.Shared.Identifiers;
 using OnlineStoreSystem.Shared.Validation;
 

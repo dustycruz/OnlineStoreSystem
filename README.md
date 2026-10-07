@@ -304,25 +304,25 @@ dotnet tool restore
 dotnet ef dbcontext scaffold "Server=(localdb)\mssqllocaldb;Database=CatalogDb;Trusted_Connection=True;TrustServerCertificate=True" \
   Microsoft.EntityFrameworkCore.SqlServer --project src/OnlineStoreSystem.CatalogService \
   --context CatalogDbContext --context-dir Data --output-dir Data/Entities \
-  --namespace OnlineStoreSystem.CatalogService.Data.Entities --context-namespace OnlineStoreSystem.CatalogService.Data \
+  --namespace OnlineStoreSystem.CatalogService.Models --context-namespace OnlineStoreSystem.CatalogService.Data \
   --no-onconfiguring --force
 
 dotnet ef dbcontext scaffold "Server=(localdb)\mssqllocaldb;Database=InventoryDb;Trusted_Connection=True;TrustServerCertificate=True" \
   Microsoft.EntityFrameworkCore.SqlServer --project src/OnlineStoreSystem.InventoryService \
   --context InventoryDbContext --context-dir Data --output-dir Data/Entities \
-  --namespace OnlineStoreSystem.InventoryService.Data.Entities --context-namespace OnlineStoreSystem.InventoryService.Data \
+  --namespace OnlineStoreSystem.InventoryService.Models --context-namespace OnlineStoreSystem.InventoryService.Data \
   --no-onconfiguring --force
 
 dotnet ef dbcontext scaffold "Server=(localdb)\mssqllocaldb;Database=PaymentDb;Trusted_Connection=True;TrustServerCertificate=True" \
   Microsoft.EntityFrameworkCore.SqlServer --project src/OnlineStoreSystem.PaymentService \
   --context PaymentDbContext --context-dir Data --output-dir Data/Entities \
-  --namespace OnlineStoreSystem.PaymentService.Data.Entities --context-namespace OnlineStoreSystem.PaymentService.Data \
+  --namespace OnlineStoreSystem.PaymentService.Models --context-namespace OnlineStoreSystem.PaymentService.Data \
   --no-onconfiguring --force
 
 dotnet ef dbcontext scaffold "Server=(localdb)\mssqllocaldb;Database=OrderDb;Trusted_Connection=True;TrustServerCertificate=True" \
   Microsoft.EntityFrameworkCore.SqlServer --project src/OnlineStoreSystem.OrderService \
   --context OrderDbContext --context-dir Data --output-dir Data/Entities \
-  --namespace OnlineStoreSystem.OrderService.Data.Entities --context-namespace OnlineStoreSystem.OrderService.Data \
+  --namespace OnlineStoreSystem.OrderService.Models --context-namespace OnlineStoreSystem.OrderService.Data \
   --no-onconfiguring --force
 ```
 
@@ -394,7 +394,7 @@ in the response, `application/problem+json` (RFC 7807 / RFC 9457) for every erro
 |---|---|---|
 | Correlation id | `Correlation/CorrelationIdMiddleware.cs`, `CorrelationIdDelegatingHandler.cs`, `CorrelationIdAccessor.cs`, `CorrelationIdExtensions.cs` | Edge generation / validation of `X-Correlation-Id`, `AsyncLocal` accessor (works for HTTP **and** RabbitMQ deliveries), `ILogger.BeginScope` so every log line carries `CorrelationId`, outgoing propagation on every `IHttpClientFactory` client |
 | Events | `Events/OrderPlacedEvent.cs`, `StockReservedEvent.cs`, `StockReservationFailedEvent.cs`, `StockReleasedEvent.cs`, `PaymentProcessedEvent.cs`, `PaymentFailedEvent.cs`, `OrderCancelledEvent.cs`, `IntegrationEvent.cs` | Message contracts (`EventId` = AMQP `message-id` = idempotency key) |
-| RabbitMQ | `Messaging/RabbitMqOptions.cs`, `RabbitMqConnectionFactoryHelper.cs`, `RabbitMqConnectionProvider.cs`, `MessagingTopology.cs`, `RabbitMqTopology.cs`, `RabbitMqEventPublisher.cs`, `RabbitMqConsumerBackgroundService.cs`, `RabbitMqHealthCheck.cs` | Options (local broker or CloudAMQP URI), auto-recovering connection, idempotent topology declaration incl. DLX/DLQ, **publisher with confirms + mandatory**, consumer base class with **manual ACK / NACK / dead-lettering** |
+| RabbitMQ | `Messaging/RabbitMqOptions.cs`, `RabbitMqConnectionFactoryHelper.cs`, `RabbitMqConnectionProvider.cs`, `RabbitMqConfiguration.cs`, `RabbitMqTopology.cs`, `RabbitMqPublisher.cs`, `RabbitMqConsumerBackgroundService.cs`, `RabbitMqHealthCheck.cs` | Options (local broker or CloudAMQP URI), auto-recovering connection, idempotent topology declaration incl. DLX/DLQ, **publisher with confirms + mandatory**, consumer base class with **manual ACK / NACK / dead-lettering** |
 | DTOs | `Contracts/Catalog`, `Contracts/Orders`, `Contracts/Inventory`, `Contracts/Payments`, `Contracts/Common/PagedResult.cs` | Request/response models with DataAnnotations (Luhn check, ISO 4217, SKU pattern...) and shared status vocabularies |
 | Problem details | `Problems/ProblemDetailsSetupExtensions.cs`, `GlobalExceptionHandler.cs`, `ProblemTypes.cs`, `ControllerProblemExtensions.cs` | RFC 7807 everywhere + exception mapping (`DependencyUnavailableException` → 503) |
 | Logging | `Logging/SerilogSetupExtensions.cs` | Serilog console + `logs/<app>-<date>.log`, request logging with correlation id |
@@ -472,7 +472,7 @@ ACK is never lost for good, and stock is never reserved twice.
 | [`Clients/CatalogClient.cs`](src/OnlineStoreSystem.OrderService/Clients/CatalogClient.cs) | typed client, batch product validation |
 | [`Clients/PaymentClient.cs`](src/OnlineStoreSystem.OrderService/Clients/PaymentClient.cs) | typed client, `Idempotency-Key: order-{orderId}-charge`, parses 402 problem details |
 | [`Clients/ResiliencePolicies.cs`](src/OnlineStoreSystem.OrderService/Clients/ResiliencePolicies.cs) | retry (exponential + jitter), attempt / total timeout, circuit breaker, retry logging |
-| [`Shared/Messaging/RabbitMqEventPublisher.cs`](src/OnlineStoreSystem.Shared/Messaging/RabbitMqEventPublisher.cs) | publisher with confirms (shared with InventoryService) |
+| [`Shared/Messaging/RabbitMqPublisher.cs`](src/OnlineStoreSystem.Shared/Messaging/RabbitMqPublisher.cs) | publisher with confirms (shared with InventoryService) |
 | [`Outbox/OutboxDispatcher.cs`](src/OnlineStoreSystem.OrderService/Outbox/OutboxDispatcher.cs) | transactional outbox relay (marks rows processed only after the broker confirm) |
 | [`Saga/OrderSagaOrchestrator.cs`](src/OnlineStoreSystem.OrderService/Saga/OrderSagaOrchestrator.cs) | the state machine: start, replies, payment, compensation, recovery |
 | [`Saga/SagaRecoveryService.cs`](src/OnlineStoreSystem.OrderService/Saga/SagaRecoveryService.cs) | resumes stalled sagas (payment retry, reservation timeout, unconfirmed compensation) with the original correlation id |

@@ -6,17 +6,15 @@ using OnlineStoreSystem.Storefront.Models;
 namespace OnlineStoreSystem.Storefront.Controllers;
 
 /// <summary>Browse products (CatalogService) with live availability (InventoryService).</summary>
-public sealed class CatalogController(
-    CatalogApiClient catalogApi,
-    InventoryApiClient inventoryApi) : Controller
+public sealed class CatalogController(StorefrontApiClient api) : Controller
 {
     private const int PageSize = 12;
 
     public async Task<IActionResult> Index(string? search, string? category, int page = 1, CancellationToken cancellationToken = default)
     {
         page = Math.Max(1, page);
-        var productsTask = catalogApi.GetProductsAsync(search, category, page, PageSize, cancellationToken);
-        var stockTask = inventoryApi.GetStockLevelsAsync(cancellationToken);
+        var productsTask = api.GetProductsAsync(search, category, page, PageSize, cancellationToken);
+        var stockTask = api.GetStockLevelsAsync(cancellationToken);
         await Task.WhenAll(productsTask, stockTask);
 
         var products = await productsTask;
@@ -48,8 +46,8 @@ public sealed class CatalogController(
 
     public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
     {
-        var productTask = catalogApi.GetProductAsync(id, cancellationToken);
-        var stockTask = inventoryApi.GetStockLevelsAsync(cancellationToken);
+        var productTask = api.GetProductAsync(id, cancellationToken);
+        var stockTask = api.GetStockLevelsAsync(cancellationToken);
         await Task.WhenAll(productTask, stockTask);
 
         var product = await productTask;

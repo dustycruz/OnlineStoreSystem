@@ -2,14 +2,14 @@
 // SCAFFOLDED (database-first) - reverse-engineered from CatalogDb with:
 //   dotnet ef dbcontext scaffold "Server=(localdb)\mssqllocaldb;Database=CatalogDb;Trusted_Connection=True;TrustServerCertificate=True"
 //     Microsoft.EntityFrameworkCore.SqlServer --project src/OnlineStoreSystem.CatalogService
-//     --context CatalogDbContext --context-dir Data --output-dir Data/Entities
-//     --namespace OnlineStoreSystem.CatalogService.Data.Entities
+//     --context CatalogDbContext --context-dir Data --output-dir Models
+//     --namespace OnlineStoreSystem.CatalogService.Models
 //     --context-namespace OnlineStoreSystem.CatalogService.Data --no-onconfiguring --force
 //   Do not edit by hand: re-run the command after changing sql/01_CatalogDb.sql.
 using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
-using OnlineStoreSystem.CatalogService.Data.Entities;
+using OnlineStoreSystem.CatalogService.Models;
 
 namespace OnlineStoreSystem.CatalogService.Data;
 
@@ -34,15 +34,15 @@ public partial class CatalogDbContext : DbContext
 
             entity.Property(e => e.Category)
                 .HasMaxLength(100)
-                .HasDefaultValue("General");
+                .HasDefaultValue("General", "DF_Products_Category");
             entity.Property(e => e.CreatedAtUtc)
                 .HasPrecision(3)
-                .HasDefaultValueSql("(sysutcdatetime())");
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_Products_CreatedAtUtc");
             entity.Property(e => e.Currency)
                 .HasMaxLength(3)
                 .IsUnicode(false)
-                .HasDefaultValue("USD")
-                .IsFixedLength();
+                .IsFixedLength()
+                .HasDefaultValue("USD", "DF_Products_Currency");
             entity.Property(e => e.Description).HasMaxLength(2000);
             entity.Property(e => e.Name).HasMaxLength(200);
             entity.Property(e => e.Price).HasColumnType("decimal(18, 2)");

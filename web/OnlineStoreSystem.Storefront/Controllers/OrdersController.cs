@@ -1,7 +1,7 @@
 // File: web/OnlineStoreSystem.Storefront/Controllers/OrdersController.cs
 using Microsoft.AspNetCore.Mvc;
-using OnlineStoreSystem.Shared.Contracts.Orders;
 using OnlineStoreSystem.Shared.Correlation;
+using OnlineStoreSystem.Shared.DTOs;
 using OnlineStoreSystem.Storefront.Clients;
 using OnlineStoreSystem.Storefront.Models;
 using OnlineStoreSystem.Storefront.Services;
@@ -10,8 +10,7 @@ namespace OnlineStoreSystem.Storefront.Controllers;
 
 /// <summary>Cart, checkout (starts the saga in OrderService) and order status pages.</summary>
 public sealed class OrdersController(
-    CatalogApiClient catalogApi,
-    OrdersApiClient ordersApi,
+    StorefrontApiClient api,
     CartService cart,
     CustomerContext customer,
     ILogger<OrdersController> logger) : Controller
@@ -26,7 +25,7 @@ public sealed class OrdersController(
     public async Task<IActionResult> AddToCart(int productId, int quantity = 1, string? returnUrl = null,
         CancellationToken cancellationToken = default)
     {
-        var product = await catalogApi.GetProductAsync(productId, cancellationToken);
+        var product = await api.GetProductAsync(productId, cancellationToken);
         if (!product.IsSuccess)
         {
             TempData["Error"] = product.ErrorMessage ?? $"Product {productId} is not available.";
@@ -112,7 +111,7 @@ public sealed class OrdersController(
             }
         };
 
-        var result = await ordersApi.CheckoutAsync(request, cancellationToken);
+        var result = await api.CheckoutAsync(request, cancellationToken);
         if (result.IsSuccess)
         {
             cart.Clear();
@@ -148,7 +147,7 @@ public sealed class OrdersController(
     [HttpGet]
     public async Task<IActionResult> Status(Guid id, CancellationToken cancellationToken)
     {
-        var result = await ordersApi.GetOrderAsync(id, cancellationToken);
+        var result = await api.GetOrderAsync(id, cancellationToken);
         if (result.StatusCode == StatusCodes.Status404NotFound)
         {
             Response.StatusCode = StatusCodes.Status404NotFound;
@@ -167,7 +166,7 @@ public sealed class OrdersController(
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
         var customerId = customer.CustomerId;
-        var result = await ordersApi.GetOrdersAsync(customerId, cancellationToken);
+        var result = await api.GetOrdersAsync(customerId, cancellationToken);
         return View(new OrdersIndexViewModel
         {
             CustomerId = customerId,

@@ -1,7 +1,7 @@
 // File: src/OnlineStoreSystem.InventoryService/Mapping/InventoryMappings.cs
-using OnlineStoreSystem.InventoryService.Data.Entities;
+using OnlineStoreSystem.InventoryService.Models;
 using OnlineStoreSystem.InventoryService.Services;
-using OnlineStoreSystem.Shared.Contracts.Inventory;
+using OnlineStoreSystem.Shared.DTOs;
 
 namespace OnlineStoreSystem.InventoryService.Mapping;
 

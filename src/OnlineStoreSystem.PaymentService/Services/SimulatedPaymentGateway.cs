@@ -1,6 +1,6 @@
 // File: src/OnlineStoreSystem.PaymentService/Services/SimulatedPaymentGateway.cs
 using Microsoft.Extensions.Options;
-using OnlineStoreSystem.Shared.Contracts.Payments;
+using OnlineStoreSystem.Shared.DTOs;
 
 namespace OnlineStoreSystem.PaymentService.Services;
 

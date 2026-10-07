@@ -24,7 +24,7 @@ public static class MessagingServiceCollectionExtensions
 
             services.AddCorrelationId();
             services.TryAddSingleton<IRabbitMqConnectionProvider, RabbitMqConnectionProvider>();
-            services.TryAddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+            services.TryAddSingleton<IEventPublisher, RabbitMqPublisher>();
             return services;
         }
     }

@@ -4,8 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using OnlineStoreSystem.PaymentService.Data;
 using OnlineStoreSystem.PaymentService.Mapping;
 using OnlineStoreSystem.PaymentService.Services;
-using OnlineStoreSystem.Shared.Contracts.Payments;
 using OnlineStoreSystem.Shared.Correlation;
+using OnlineStoreSystem.Shared.DTOs;
 using OnlineStoreSystem.Shared.Problems;
 
 namespace OnlineStoreSystem.PaymentService.Controllers;

@@ -1,6 +1,6 @@
 // File: src/OnlineStoreSystem.OrderService/Outbox/OutboxMessageFactory.cs
 using System.Text.Json;
-using OnlineStoreSystem.OrderService.Data.Entities;
+using OnlineStoreSystem.OrderService.Models;
 using OnlineStoreSystem.Shared.Events;
 using OnlineStoreSystem.Shared.Messaging;
 

@@ -34,18 +34,19 @@ builder.Services.AddOptions<ApiEndpointsOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-// ---- Typed HTTP clients (IHttpClientFactory) with correlation propagation + resilience ----
-builder.Services.AddHttpClient<CatalogApiClient>((services, client) =>
+// ---- Named HTTP clients (IHttpClientFactory) with correlation propagation + resilience ----
+// StorefrontApiClient picks the right one per call: CatalogApi (5001), OrderApi (5002), InventoryApi (5003).
+builder.Services.AddHttpClient(StorefrontApiClient.CatalogClientName, (services, client) =>
         client.BaseAddress = ApiEndpointsOptions.ToBaseUri(services.GetRequiredService<IOptions<ApiEndpointsOptions>>().Value.CatalogBaseUrl))
     .AddCorrelationIdPropagation()
     .AddStandardResilienceHandler(ConfigureUiResilience);
 
-builder.Services.AddHttpClient<InventoryApiClient>((services, client) =>
+builder.Services.AddHttpClient(StorefrontApiClient.InventoryClientName, (services, client) =>
         client.BaseAddress = ApiEndpointsOptions.ToBaseUri(services.GetRequiredService<IOptions<ApiEndpointsOptions>>().Value.InventoryBaseUrl))
     .AddCorrelationIdPropagation()
     .AddStandardResilienceHandler(ConfigureUiResilience);
 
-builder.Services.AddHttpClient<OrdersApiClient>((services, client) =>
+builder.Services.AddHttpClient(StorefrontApiClient.OrderClientName, (services, client) =>
         client.BaseAddress = ApiEndpointsOptions.ToBaseUri(services.GetRequiredService<IOptions<ApiEndpointsOptions>>().Value.OrderBaseUrl))
     .AddCorrelationIdPropagation()
     .AddStandardResilienceHandler(options =>
@@ -59,6 +60,7 @@ builder.Services.AddHttpClient<OrdersApiClient>((services, client) =>
         options.Retry.DisableForUnsafeHttpMethods();
     });
 
+builder.Services.AddScoped<StorefrontApiClient>();
 builder.Services.AddScoped<CartService>();
 builder.Services.AddScoped<CustomerContext>();
 builder.Services.AddHealthChecks();
