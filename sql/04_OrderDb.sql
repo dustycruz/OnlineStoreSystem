@@ -17,6 +17,16 @@
 -- =============================================================================
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
+-- Session options required for computed-column indexes and filtered indexes.
+-- SSMS turns these on by default; sqlcmd does NOT (QUOTED_IDENTIFIER is OFF there),
+-- so they are set explicitly to make the script behave the same in every client.
+SET ANSI_NULLS ON;
+SET ANSI_PADDING ON;
+SET ANSI_WARNINGS ON;
+SET ARITHABORT ON;
+SET CONCAT_NULL_YIELDS_NULL ON;
+SET QUOTED_IDENTIFIER ON;
+SET NUMERIC_ROUNDABORT OFF;
 GO
 
 USE [master];
